@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RAODEV Split • Gestão de Despesas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app-wrapper">
+    <div class="app-container">
+      
+      <!-- Cabeçalho -->
+      <header class="app-header">
+        <div class="logo-badge">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <h1>RAODEV Split</h1>
+        <p>Divisão inteligente de despesas por grupos</p>
+      </header>
+
+      <!-- Barra de Grupos e Backup -->
+      <section class="card group-bar-card">
+        <div class="group-selector-row">
+          <div class="group-select-wrapper">
+            <label for="select-grupo">Grupo Atual</label>
+            <select id="select-grupo"></select>
+          </div>
+          <div class="group-actions">
+            <button type="button" id="btn-renomear-grupo" class="btn-secondary" title="Renomear grupo atual">✎</button>
+            <button type="button" id="btn-novo-grupo" class="btn-secondary" title="Criar novo grupo">+ Grupo</button>
+            <button type="button" id="btn-excluir-grupo" class="btn-danger-ghost" title="Excluir grupo atual">Excluir</button>
+          </div>
+        </div>
+
+        <div class="backup-bar">
+          <span class="save-status" id="save-status">● Salvo automaticamente no navegador</span>
+          <div class="backup-buttons">
+            <button type="button" id="btn-balanco-global" class="btn-outline-sm" style="border-color: #0284c7; color: #0369a1; background: #e0f2fe;">🌐 Balanço Global</button>
+            <button type="button" id="btn-exportar-json" class="btn-outline-sm">💾 Salvar</button>
+            <label for="input-importar-json" class="btn-outline-sm file-label">📂 Importar</label>
+            <input type="file" id="input-importar-json" accept=".json" hidden>
+          </div>
+        </div>
+      </section>
+
+      <!-- Seção 1: Participantes -->
+      <section class="card">
+        <div class="card-title">
+          <span class="step-badge">1</span>
+          <h2>Participantes do Grupo</h2>
+        </div>
+        
+        <form id="form-pessoa" class="input-group-inline">
+          <input type="text" id="nome-pessoa" placeholder="Digite o nome (ex: Rodrigo, Jessica)..." autocomplete="off">
+          <button type="submit" class="btn-secondary">+ Adicionar</button>
+        </form>
+
+        <div id="lista-pessoas" class="tags-container"></div>
+      </section>
+
+      <!-- Seção 2: Novo Gasto / Edição -->
+      <section class="card" id="card-form-gasto">
+        <div class="card-header-between" style="margin-bottom: 16px;">
+          <div class="card-title" style="margin-bottom: 0;">
+            <span class="step-badge">2</span>
+            <h2 id="titulo-form-gasto">Registrar Novo Gasto</h2>
+          </div>
+          <button type="button" id="btn-cancelar-edicao" class="btn-danger-ghost hidden">Cancelar Edição</button>
+        </div>
+
+        <form id="form-gasto">
+          <input type="hidden" id="edit-gasto-id" value="">
+
+          <div class="form-group">
+            <label for="desc-gasto">O que foi pago?</label>
+            <input type="text" id="desc-gasto" placeholder="Ex: Supermercado, Combustível, Jantar..." required>
+          </div>
+
+          <!-- Seletor Opcional de Categoria -->
+          <div class="form-group">
+            <div class="label-row">
+              <label>Categoria <span class="label-optional">(opcional)</span></label>
+              <button type="button" id="btn-limpar-categoria" class="btn-text hidden">Limpar seleção</button>
+            </div>
+            <div id="category-selector" class="category-grid"></div>
+          </div>
+
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="valor-gasto">Valor Total (R$)</label>
+              <input type="number" id="valor-gasto" step="0.01" min="0.01" placeholder="0,00" required>
+            </div>
+
+            <div class="form-group">
+              <label for="pagador-gasto">Quem pagou?</label>
+              <select id="pagador-gasto" required>
+                <option value="">Adicione alguém acima</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Modo de Divisão -->
+          <div class="form-group">
+            <div class="label-row">
+              <label>Modo de divisão:</label>
+              <button type="button" id="btn-todos" class="btn-text">Alternar todos</button>
+            </div>
+
+            <div class="split-mode-tabs" id="split-mode-tabs">
+              <button type="button" class="mode-tab active" data-mode="igual">⚖️ Igual</button>
+              <button type="button" class="mode-tab" data-mode="exato">💲 Valor Exato</button>
+              <button type="button" class="mode-tab" data-mode="cotas">📊 Por Cotas</button>
+            </div>
+
+            <div id="area-divisao-dinamica" class="people-selector-box">
+              <span class="empty-state-text">Adicione participantes na etapa 1 para selecionar.</span>
+            </div>
+
+            <div id="split-feedback" class="split-feedback hidden"></div>
+          </div>
+
+          <button type="submit" id="btn-submit-gasto" class="btn-primary">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Salvar Despesa
+          </button>
+        </form>
+      </section>
+
+      <!-- Seção 3: Acerto de Contas -->
+      <section class="card highlight-card">
+        <div class="card-header-between" style="flex-wrap: wrap; gap: 8px;">
+          <div class="card-title" style="margin-bottom: 0;">
+            <span class="step-badge">3</span>
+            <h2>Resumo e Acerto</h2>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" id="btn-abrir-quitar" class="btn-success-sm">💸 Quitar Conta</button>
+            <button type="button" id="btn-relatorio" class="btn-primary-sm">📄 Relatório</button>
+          </div>
+        </div>
+
+        <div id="resumo-saldos" class="saldos-grid" style="margin-top: 16px;"></div>
+        
+        <div class="divider"></div>
+        
+        <h3 class="sub-heading">Quem paga quem (Saldo pendente):</h3>
+        <ul id="lista-acertos" class="acertos-list"></ul>
+      </section>
+
+      <!-- Seção 4: Histórico -->
+      <section class="card">
+        <div class="card-header-between" style="flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+          <div class="card-title" style="margin-bottom: 0;">
+            <span class="step-badge">4</span>
+            <h2>Histórico do Grupo</h2>
+          </div>
+          <span id="total-grupo-badge" class="total-badge">Total Gasto: R$ 0,00</span>
+        </div>
+
+        <!-- Filtro por Categoria e Botão Totais -->
+        <div class="filter-bar">
+          <label for="filtro-categoria">Filtrar:</label>
+          <select id="filtro-categoria" class="select-sm"></select>
+          <button type="button" id="btn-toggle-totais" class="btn-secondary-sm" title="Ver resumo de totais">📊 Totais</button>
+        </div>
+
+        <!-- Painel Retrátil de Totais -->
+        <div id="painel-totais" class="totais-panel hidden">
+          <div class="totais-header">
+            <h3>Resumo Analítico de Gastos</h3>
+            <span id="totais-filtro-info" class="totais-sub"></span>
+          </div>
+          <div id="totais-conteudo" class="totais-grid"></div>
+        </div>
+
+        <ul id="lista-gastos" class="gastos-list"></ul>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Modal Balanço Global (Todos os Grupos) -->
+  <div id="modal-global" class="modal-overlay hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2>🌐 Balanço Global (Todos os Grupos)</h2>
+        <button type="button" id="btn-fechar-global" class="btn-close">×</button>
+      </div>
+      
+      <div id="global-conteudo" class="modal-body"></div>
+
+      <div class="modal-footer">
+        <button type="button" id="btn-copiar-global" class="btn-secondary">📋 Copiar p/ WhatsApp</button>
+        <button type="button" id="btn-ok-global" class="btn-primary" style="width: auto; margin-top: 0;">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Quitar Conta -->
+  <div id="modal-quitar" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width: 440px;">
+      <div class="modal-header">
+        <h2>💸 Registrar Pagamento / Quitação</h2>
+        <button type="button" id="btn-fechar-quitar" class="btn-close">×</button>
+      </div>
+      
+      <form id="form-quitar" class="modal-body">
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">
+          Registre uma transferência feita entre participantes para abater total ou parcialmente uma dívida.
+        </p>
+
+        <div class="form-group">
+          <label for="quitar-de">Quem pagou? (Devedor)</label>
+          <select id="quitar-de" required></select>
+        </div>
+
+        <div class="form-group">
+          <label for="quitar-para">Pagou para quem? (Recebedor)</label>
+          <select id="quitar-para" required></select>
+        </div>
+
+        <div class="form-group">
+          <label for="quitar-valor">Valor Pago (R$)</label>
+          <input type="number" id="quitar-valor" step="0.01" min="0.01" placeholder="0,00" required>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 0;">
+          <label for="quitar-obs">Observação (Opcional)</label>
+          <input type="text" id="quitar-obs" placeholder="Ex: Pix parcial, Dinheiro...">
+        </div>
+
+        <div class="modal-footer" style="margin: 20px -24px -24px; padding: 14px 24px;">
+          <button type="button" id="btn-cancelar-quitar" class="btn-secondary">Cancelar</button>
+          <button type="submit" class="btn-success">Confirmar Pagamento</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal de Relatório -->
+  <div id="modal-relatorio" class="modal-overlay hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2 id="relatorio-titulo">Relatório de Despesas</h2>
+        <button type="button" id="btn-fechar-modal" class="btn-close">×</button>
+      </div>
+      
+      <div id="relatorio-conteudo" class="modal-body"></div>
+
+      <div class="modal-footer">
+        <button type="button" id="btn-copiar-texto" class="btn-secondary">📋 Copiar p/ WhatsApp</button>
+        <button type="button" id="btn-imprimir" class="btn-primary" style="width: auto; margin-top: 0;">🖨️ Imprimir / PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
