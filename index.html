@@ -19,10 +19,10 @@
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         </div>
         <h1>RAODEV Split</h1>
-        <p>Divisão inteligente de despesas por grupos</p>
+        <p>Divisão inteligente de despesas em tempo real</p>
       </header>
 
-      <!-- Barra de Grupos e Backup -->
+      <!-- Barra de Grupos e Nuvem -->
       <section class="card group-bar-card">
         <div class="group-selector-row">
           <div class="group-select-wrapper">
@@ -32,15 +32,24 @@
           <div class="group-actions">
             <button type="button" id="btn-renomear-grupo" class="btn-secondary" title="Renomear grupo atual">✎</button>
             <button type="button" id="btn-novo-grupo" class="btn-secondary" title="Criar novo grupo">+ Grupo</button>
-            <button type="button" id="btn-excluir-grupo" class="btn-danger-ghost" title="Excluir grupo atual">Excluir</button>
+            <button type="button" id="btn-excluir-grupo" class="btn-danger-ghost" title="Sair ou excluir grupo">Sair/Excluir</button>
           </div>
         </div>
 
-        <div class="backup-bar">
-          <span class="save-status" id="save-status">● Salvo automaticamente no navegador</span>
+        <!-- Barra de Compartilhamento -->
+        <div class="backup-bar" style="border-top: 1px solid #e0f2fe; padding-top: 10px; margin-top: 12px;">
+          <span class="save-status" id="save-status">🟡 Conectando à nuvem...</span>
           <div class="backup-buttons">
-            <button type="button" id="btn-balanco-global" class="btn-outline-sm" style="border-color: #0284c7; color: #0369a1; background: #e0f2fe;">🌐 Balanço Global</button>
-            <button type="button" id="btn-exportar-json" class="btn-outline-sm">💾 Salvar</button>
+            <button type="button" id="btn-compartilhar-grupo" class="btn-outline-sm" style="background: #dcfce7; border-color: #86efac; color: #15803d;">🔗 Convidar / Link</button>
+            <button type="button" id="btn-entrar-codigo" class="btn-outline-sm">🔑 Código</button>
+          </div>
+        </div>
+
+        <!-- Barra de Backup e Balanço Global -->
+        <div class="backup-bar" style="margin-top: 10px; padding-top: 10px;">
+          <button type="button" id="btn-balanco-global" class="btn-outline-sm" style="border-color: #0284c7; color: #0369a1; background: #e0f2fe;">🌐 Balanço Global</button>
+          <div class="backup-buttons">
+            <button type="button" id="btn-exportar-json" class="btn-outline-sm">💾 Backup</button>
             <label for="input-importar-json" class="btn-outline-sm file-label">📂 Importar</label>
             <input type="file" id="input-importar-json" accept=".json" hidden>
           </div>
@@ -258,6 +267,6 @@
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

@@ -1,7 +1,28 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  deleteDoc,
+  onSnapshot
+} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+
+// Configuração do seu projeto Firebase (splitrao)
+const firebaseConfig = {
+  apiKey: "AIzaSyDheZEifsJ7WDQk9-l6wosXZuewyjyy3Sg",
+  authDomain: "splitrao.firebaseapp.com",
+  projectId: "splitrao",
+  storageBucket: "splitrao.firebasestorage.app",
+  messagingSenderId: "164442586974",
+  appId: "1:164442586974:web:0210ece879b7b78363d9cf"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
 document.addEventListener('DOMContentLoaded', () => {
   const STORAGE_KEY = 'raodev_split_grupos_v1';
 
-  // Definição das Categorias com Ícones Vetoriais (SVG)
   const CATEGORIAS = [
     {
       id: 'Casa',
@@ -61,7 +82,22 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
   } catch (err) {
-    console.error('Erro ao carregar dados do navegador:', err);
+    console.error('Erro ao carregar cache local:', err);
+  }
+
+  // Verifica se entrou por link compartilhado (?grupo=ID_DO_GRUPO)
+  const urlParams = new URLSearchParams(window.location.search);
+  const grupoUrlId = urlParams.get('grupo');
+  if (grupoUrlId) {
+    if (!appData.grupos.some((g) => g.id === grupoUrlId)) {
+      appData.grupos.push({
+        id: grupoUrlId,
+        nome: 'Carregando grupo...',
+        pessoas: [],
+        gastos: []
+      });
+    }
+    appData.grupoAtivoId = grupoUrlId;
   }
 
   // Estados temporários de UI
@@ -69,12 +105,15 @@ document.addEventListener('DOMContentLoaded', () => {
   let categoriaSelecionada = '';
   let filtroCategoriaAtual = 'todas';
   let painelTotaisAberto = false;
+  const unsubscribersNuvem = {}; // Guarda ouvintes ativos por grupo
 
   // Referências do DOM
   const selectGrupo = document.getElementById('select-grupo');
   const btnRenomearGrupo = document.getElementById('btn-renomear-grupo');
   const btnNovoGrupo = document.getElementById('btn-novo-grupo');
   const btnExcluirGrupo = document.getElementById('btn-excluir-grupo');
+  const btnCompartilharGrupo = document.getElementById('btn-compartilhar-grupo');
+  const btnEntrarCodigo = document.getElementById('btn-entrar-codigo');
   const btnBalancoGlobal = document.getElementById('btn-balanco-global');
   const btnExportarJson = document.getElementById('btn-exportar-json');
   const inputImportarJson = document.getElementById('input-importar-json');
@@ -146,6 +185,148 @@ document.addEventListener('DOMContentLoaded', () => {
     return grupo;
   }
 
+  function salvarCacheLocal() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+    } catch (err) {
+      console.error('Erro ao salvar cache local:', err);
+    }
+  }
+
+  // --- SINCRONIZAÇÃO EM TEMPO REAL COM O FIRESTORE ---
+  function conectarGrupoNuvem(grupoId) {
+    if (unsubscribersNuvem[grupoId]) return;
+
+    const docRef = doc(db, 'grupos', grupoId);
+    unsubscribersNuvem[grupoId] = onSnapshot(
+      docRef,
+      async (snapshot) => {
+        if (snapshot.exists()) {
+          const dadosRemotos = snapshot.data();
+          const idx = appData.grupos.findIndex((g) => g.id === grupoId);
+          if (idx !== -1) {
+            appData.grupos[idx] = {
+              id: grupoId,
+              nome: dadosRemotos.nome || 'Grupo Sem Nome',
+              pessoas: Array.isArray(dadosRemotos.pessoas) ? dadosRemotos.pessoas : [],
+              gastos: Array.isArray(dadosRemotos.gastos) ? dadosRemotos.gastos : []
+            };
+          } else {
+            appData.grupos.push({
+              id: grupoId,
+              nome: dadosRemotos.nome || 'Grupo Compartilhado',
+              pessoas: Array.isArray(dadosRemotos.pessoas) ? dadosRemotos.pessoas : [],
+              gastos: Array.isArray(dadosRemotos.gastos) ? dadosRemotos.gastos : []
+            });
+          }
+
+          salvarCacheLocal();
+          saveStatus.textContent =
+            '🟢 Sincronizado às ' +
+            new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          renderizarTudo();
+        } else {
+          // Se o grupo ainda não existe no Firestore (ex: grupo local antigo), sobe ele agora
+          const localGrp = appData.grupos.find((g) => g.id === grupoId);
+          if (localGrp && localGrp.nome !== 'Carregando grupo...') {
+            await enviarGrupoParaNuvem(localGrp);
+          } else if (localGrp && localGrp.nome === 'Carregando grupo...') {
+            alert('Grupo não encontrado na nuvem. Verifique o link ou código.');
+            appData.grupos = appData.grupos.filter((g) => g.id !== grupoId);
+            if (appData.grupos.length === 0) appData = criarEstadoInicial();
+            appData.grupoAtivoId = appData.grupos[0].id;
+            salvarCacheLocal();
+            renderizarTudo();
+          }
+        }
+      },
+      (error) => {
+        console.error('Erro na sincronização:', error);
+        saveStatus.textContent = '🔴 Sem conexão com a nuvem (Modo Offline)';
+      }
+    );
+  }
+
+  function conectarTodosGruposNuvem() {
+    appData.grupos.forEach((g) => conectarGrupoNuvem(g.id));
+  }
+
+  async function enviarGrupoParaNuvem(grupo) {
+    salvarCacheLocal();
+    renderizarTudo();
+    saveStatus.textContent = '🟡 Salvando na nuvem...';
+
+    try {
+      const docRef = doc(db, 'grupos', grupo.id);
+      await setDoc(docRef, {
+        nome: grupo.nome,
+        pessoas: grupo.pessoas,
+        gastos: grupo.gastos,
+        atualizadoEm: new Date().toISOString()
+      });
+      saveStatus.textContent =
+        '🟢 Sincronizado às ' +
+        new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    } catch (err) {
+      console.error('Erro ao enviar para Firestore:', err);
+      saveStatus.textContent = '🔴 Erro ao salvar na nuvem (verifique regras/internet)';
+    }
+  }
+
+  function salvarDados() {
+    const grupo = getGrupoAtivo();
+    enviarGrupoParaNuvem(grupo);
+  }
+
+  // --- COMPARTILHAR LINK E ENTRAR COM CÓDIGO ---
+  btnCompartilharGrupo.addEventListener('click', async () => {
+    const grupo = getGrupoAtivo();
+    // Garante que o grupo já está salvo na nuvem antes de compartilhar
+    await enviarGrupoParaNuvem(grupo);
+
+    const baseUrl = window.location.origin + window.location.pathname;
+    const linkConvite = `${baseUrl}?grupo=${encodeURIComponent(grupo.id)}`;
+    const mensagem = `Entra no nosso grupo "${grupo.nome}" no RAODEV Split para lançarmos os gastos juntos:\n${linkConvite}\n\n(Código do grupo: ${grupo.id})`;
+
+    try {
+      await navigator.clipboard.writeText(mensagem);
+      alert(
+        `✅ Link de convite copiado!\n\nCole no WhatsApp do grupo para seus amigos entrarem:\n\n${linkConvite}`
+      );
+    } catch (err) {
+      prompt('Copie o link abaixo e envie para seus amigos:', linkConvite);
+    }
+  });
+
+  btnEntrarCodigo.addEventListener('click', () => {
+    const entrada = prompt('Cole o Código do Grupo (ex: grp_173198...) ou o link completo:');
+    if (!entrada || !entrada.trim()) return;
+
+    let codigo = entrada.trim();
+    if (codigo.includes('grupo=')) {
+      try {
+        const u = new URL(codigo);
+        codigo = u.searchParams.get('grupo') || codigo;
+      } catch (_) {
+        codigo = codigo.split('grupo=')[1].split('&')[0];
+      }
+    }
+
+    if (!appData.grupos.some((g) => g.id === codigo)) {
+      appData.grupos.push({
+        id: codigo,
+        nome: 'Carregando grupo...',
+        pessoas: [],
+        gastos: []
+      });
+    }
+
+    appData.grupoAtivoId = codigo;
+    salvarCacheLocal();
+    conectarGrupoNuvem(codigo);
+    renderizarTudo();
+  });
+
   function getCategoriaObj(catId) {
     return CATEGORIAS.find((c) => c.id === catId) || null;
   }
@@ -164,19 +345,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return mapa;
   }
 
-  function salvarDados() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
-      saveStatus.textContent =
-        '● Salvo às ' +
-        new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    } catch (err) {
-      console.error('Erro ao salvar:', err);
-      saveStatus.textContent = '⚠ Erro ao salvar no navegador';
-    }
-    renderizarTudo();
-  }
-
   function formatarMoeda(valor) {
     return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   }
@@ -185,7 +353,6 @@ document.addEventListener('DOMContentLoaded', () => {
   let textoGlobalWhatsApp = '';
 
   function calcularBalancoGlobal() {
-    // Mapeia nome normalizado (lowercase) -> { nomeExibicao, saldoTotal, detalhesPorGrupo: [] }
     const mapaPessoas = {};
 
     function garantirPessoa(nomeOriginal) {
@@ -554,7 +721,8 @@ document.addEventListener('DOMContentLoaded', () => {
     filtroCategoriaAtual = 'todas';
     filtroCategoriaSelect.value = 'todas';
     appData.grupoAtivoId = e.target.value;
-    salvarDados();
+    salvarCacheLocal();
+    renderizarTudo();
   });
 
   btnRenomearGrupo.addEventListener('click', () => {
@@ -572,35 +740,64 @@ document.addEventListener('DOMContentLoaded', () => {
     cancelarEdicaoGasto();
     filtroCategoriaAtual = 'todas';
     filtroCategoriaSelect.value = 'todas';
+    const novoId = 'grp_' + Date.now();
     const novoGrupo = {
-      id: 'grp_' + Date.now(),
+      id: novoId,
       nome: nome.trim(),
       pessoas: [],
       gastos: []
     };
 
     appData.grupos.push(novoGrupo);
-    appData.grupoAtivoId = novoGrupo.id;
+    appData.grupoAtivoId = novoId;
+    conectarGrupoNuvem(novoId);
     salvarDados();
   });
 
-  btnExcluirGrupo.addEventListener('click', () => {
+  btnExcluirGrupo.addEventListener('click', async () => {
     const grupo = getGrupoAtivo();
     cancelarEdicaoGasto();
 
-    if (appData.grupos.length <= 1) {
-      if (confirm(`Deseja zerar todos os dados do grupo "${grupo.nome}"?`)) {
-        grupo.pessoas = [];
-        grupo.gastos = [];
-        salvarDados();
-      }
-      return;
-    }
+    const acao = prompt(
+      `Grupo "${grupo.nome}":\n` +
+      `• Digite 1 para APENAS SAIR deste grupo no seu aparelho (mantém na nuvem para os amigos).\n` +
+      `• Digite 2 para EXCLUIR DEFINITIVAMENTE da nuvem para todos.\n` +
+      `• Deixe em branco para cancelar.`
+    );
 
-    if (confirm(`Excluir permanentemente o grupo "${grupo.nome}" e todos os seus gastos?`)) {
+    if (acao === '1') {
+      if (unsubscribersNuvem[grupo.id]) {
+        unsubscribersNuvem[grupo.id]();
+        delete unsubscribersNuvem[grupo.id];
+      }
       appData.grupos = appData.grupos.filter((g) => g.id !== grupo.id);
+      if (appData.grupos.length === 0) {
+        appData = criarEstadoInicial();
+        conectarTodosGruposNuvem();
+      }
       appData.grupoAtivoId = appData.grupos[0].id;
-      salvarDados();
+      salvarCacheLocal();
+      renderizarTudo();
+    } else if (acao === '2') {
+      if (confirm(`Tem certeza? Isso apagará "${grupo.nome}" da nuvem para TODOS os participantes!`)) {
+        try {
+          await deleteDoc(doc(db, 'grupos', grupo.id));
+        } catch (err) {
+          console.error('Erro ao deletar documento:', err);
+        }
+        if (unsubscribersNuvem[grupo.id]) {
+          unsubscribersNuvem[grupo.id]();
+          delete unsubscribersNuvem[grupo.id];
+        }
+        appData.grupos = appData.grupos.filter((g) => g.id !== grupo.id);
+        if (appData.grupos.length === 0) {
+          appData = criarEstadoInicial();
+          conectarTodosGruposNuvem();
+        }
+        appData.grupoAtivoId = appData.grupos[0].id;
+        salvarCacheLocal();
+        renderizarTudo();
+      }
     }
   });
 
@@ -623,7 +820,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const importado = JSON.parse(event.target.result);
         if (importado && Array.isArray(importado.grupos) && importado.grupos.length > 0) {
@@ -632,28 +829,30 @@ document.addEventListener('DOMContentLoaded', () => {
           const nomesImportados = importado.grupos.map((g) => `"${g.nome}"`).join(', ');
           const adicionarAosAtuais = confirm(
             `O arquivo contém ${importado.grupos.length} grupo(s): ${nomesImportados}.\n\n` +
-            `• Clique em OK para ADICIONAR esses grupos aos que você já tem.\n` +
-            `• Clique em CANCELAR para SUBSTITUIR todos os grupos atuais pelos do arquivo.`
+            `• Clique em OK para ADICIONAR esses grupos aos atuais e enviá-los para a nuvem.\n` +
+            `• Clique em CANCELAR para SUBSTITUIR a lista local pelos grupos do arquivo.`
           );
 
           if (adicionarAosAtuais) {
-            importado.grupos.forEach((g, idx) => {
+            for (let idx = 0; idx < importado.grupos.length; idx++) {
+              const g = importado.grupos[idx];
               const novoId = 'grp_' + Date.now() + '_' + idx;
-              appData.grupos.push({
-                ...g,
-                id: novoId
-              });
-              if (idx === importado.grupos.length - 1) {
-                appData.grupoAtivoId = novoId;
-              }
-            });
-            salvarDados();
-            alert(`${importado.grupos.length} grupo(s) adicionado(s) com sucesso!`);
+              const novoObj = { ...g, id: novoId };
+              appData.grupos.push(novoObj);
+              appData.grupoAtivoId = novoId;
+              await enviarGrupoParaNuvem(novoObj);
+              conectarGrupoNuvem(novoId);
+            }
+            alert(`${importado.grupos.length} grupo(s) importado(s) e sincronizado(s) na nuvem!`);
           } else {
-            if (confirm('Tem certeza que deseja apagar os grupos atuais e ficar apenas com os do arquivo?')) {
+            if (confirm('Substituir a lista local pelos grupos do arquivo?')) {
               appData = importado;
-              salvarDados();
-              alert('Grupos substituídos com sucesso!');
+              salvarCacheLocal();
+              for (const g of appData.grupos) {
+                await enviarGrupoParaNuvem(g);
+                conectarGrupoNuvem(g.id);
+              }
+              alert('Grupos substituídos e enviados para a nuvem!');
             }
           }
         } else {
@@ -1659,8 +1858,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Inicialização
+  // Inicialização e conexão com Firebase
   renderizarSeletorCategorias();
   inicializarFiltroCategorias();
   renderizarTudo();
+  conectarTodosGruposNuvem();
 });
