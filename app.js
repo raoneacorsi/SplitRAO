@@ -1,6 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
 import {
-  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   doc,
   getDoc,
   setDoc,
@@ -10,6 +12,9 @@ import {
 import {
   getAuth,
   GoogleAuthProvider,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
   signInWithPopup,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -30,12 +35,25 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager()
+  })
+});
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
 
+// Registra Service Worker para abrir o app mesmo sem internet
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch((err) => {
+      console.warn('Service Worker não registrado:', err);
+    });
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-  const STORAGE_KEY = 'raodev_split_grupos_v1';
+  const BASE_STORAGE_KEY = 'raodev_split_grupos_v2';
   const LAST_PAYER_STORAGE_KEY = 'raodev_split_last_payer_v1';
 
   let idiomaAtual = localStorage.getItem(LANG_STORAGE_KEY) || 'pt';
@@ -126,33 +144,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   let appData = criarEstadoInicial();
+  let usuarioAtual = null;
+  let modoAuthAtual = 'login';
 
-  try {
-    const salvo = localStorage.getItem(STORAGE_KEY);
-    if (salvo) {
-      const parsed = JSON.parse(salvo);
-      if (parsed && Array.isArray(parsed.grupos) && parsed.grupos.length > 0) {
-        appData = parsed;
-      }
-    }
-  } catch (err) {
-    console.error('Erro ao carregar cache local:', err);
-  }
-
-  // Verifica se entrou por link compartilhado (?grupo=ID_DO_GRUPO)
+  // Captura link de convite (?grupo=ID_DO_GRUPO) caso exista na URL
   const urlParams = new URLSearchParams(window.location.search);
   const grupoUrlId = urlParams.get('grupo');
-  if (grupoUrlId) {
-    if (!appData.grupos.some((g) => g.id === grupoUrlId)) {
-      appData.grupos.push({
-        id: grupoUrlId,
-        nome: 'Carregando grupo...',
-        pessoas: [],
-        gastos: []
-      });
-    }
-    appData.grupoAtivoId = grupoUrlId;
-  }
 
   // Estados temporários de UI
   let modoDivisaoAtual = 'igual';
@@ -254,21 +251,35 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnCopiarTexto = document.getElementById('btn-copiar-texto');
   const btnImprimir = document.getElementById('btn-imprimir');
 
-  // --- APLICAR IDIOMA ---
+  // --- MONITOR DE CONEXÃO OFFLINE / ONLINE ---
   function atualizarStatusNuvem(key, vars = {}) {
     ultimoStatusNuvem = { key, vars };
+    if (!navigator.onLine) {
+      saveStatus.textContent = '🟠 Offline (salvo no aparelho)';
+      return;
+    }
     saveStatus.textContent = t(key, vars);
   }
 
+  window.addEventListener('online', () => {
+    const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    atualizarStatusNuvem('statusSyncedAt', { time: hora });
+  });
+
+  window.addEventListener('offline', () => {
+    saveStatus.textContent = '🟠 Offline (salvo no aparelho)';
+  });
+
+  // --- APLICAR IDIOMA ---
   function aplicarIdiomaNaUI() {
     document.documentElement.lang =
       idiomaAtual === 'pt' ? 'pt-BR' : idiomaAtual === 'es' ? 'es' : 'en';
 
-    if (langSwitcher) {
-      langSwitcher.querySelectorAll('.lang-btn').forEach((btn) => {
+    document.querySelectorAll('.lang-switcher').forEach((sw) => {
+      sw.querySelectorAll('.lang-btn').forEach((btn) => {
         btn.classList.toggle('active', btn.dataset.lang === idiomaAtual);
       });
-    }
+    });
 
     document.querySelectorAll('[data-i18n]').forEach((el) => {
       const key = el.dataset.i18n;
@@ -431,22 +442,43 @@ document.addEventListener('DOMContentLoaded', () => {
     return grupo;
   }
 
+  function getChaveCacheUsuario() {
+    return usuarioAtual ? `${BASE_STORAGE_KEY}_${usuarioAtual.uid}` : null;
+  }
+
   function salvarCacheLocal() {
+    const chave = getChaveCacheUsuario();
+    if (!chave) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+      localStorage.setItem(chave, JSON.stringify(appData));
     } catch (err) {
       console.error('Erro ao salvar cache local:', err);
     }
   }
 
+  function carregarCacheLocalUsuario(uid) {
+    try {
+      const salvo = localStorage.getItem(`${BASE_STORAGE_KEY}_${uid}`);
+      if (salvo) {
+        const parsed = JSON.parse(salvo);
+        if (parsed && Array.isArray(parsed.grupos) && parsed.grupos.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
   // --- SINCRONIZAÇÃO EM TEMPO REAL COM O FIRESTORE ---
   function conectarGrupoNuvem(grupoId) {
-    if (unsubscribersNuvem[grupoId]) return;
+    if (!usuarioAtual || unsubscribersNuvem[grupoId]) return;
 
     const docRef = doc(db, 'grupos', grupoId);
     unsubscribersNuvem[grupoId] = onSnapshot(
       docRef,
       async (snapshot) => {
+        if (!usuarioAtual) return;
+
         if (snapshot.exists()) {
           const dadosRemotos = snapshot.data();
           const idx = appData.grupos.findIndex((g) => g.id === grupoId);
@@ -474,12 +506,13 @@ document.addEventListener('DOMContentLoaded', () => {
           const localGrp = appData.grupos.find((g) => g.id === grupoId);
           if (localGrp && localGrp.nome !== 'Carregando grupo...') {
             await enviarGrupoParaNuvem(localGrp);
-          } else if (localGrp && localGrp.nome === 'Carregando grupo...') {
+          } else if (localGrp && localGrp.nome === 'Carregando grupo...' && navigator.onLine) {
             alert(t('groupNotFoundAlert'));
             appData.grupos = appData.grupos.filter((g) => g.id !== grupoId);
             if (appData.grupos.length === 0) appData = criarEstadoInicial();
             appData.grupoAtivoId = appData.grupos[0].id;
             salvarCacheLocal();
+            sincronizarListaGruposUsuario();
             renderizarTudo();
           }
         }
@@ -496,6 +529,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function enviarGrupoParaNuvem(grupo) {
+    if (!usuarioAtual) return;
     salvarCacheLocal();
     renderizarTudo();
     atualizarStatusNuvem('statusSaving');
@@ -519,12 +553,14 @@ document.addEventListener('DOMContentLoaded', () => {
   function salvarDados() {
     const grupo = getGrupoAtivo();
     enviarGrupoParaNuvem(grupo);
+    sincronizarListaGruposUsuario();
   }
 
   // --- COMPARTILHAR LINK E ENTRAR COM CÓDIGO ---
   btnCompartilharGrupo.addEventListener('click', async () => {
     const grupo = getGrupoAtivo();
     await enviarGrupoParaNuvem(grupo);
+    await sincronizarListaGruposUsuario();
 
     const baseUrl = window.location.origin + window.location.pathname;
     const linkConvite = `${baseUrl}?grupo=${encodeURIComponent(grupo.id)}`;
@@ -1158,7 +1194,6 @@ document.addEventListener('DOMContentLoaded', () => {
     appData.grupoAtivoId = novoId;
     conectarGrupoNuvem(novoId);
     salvarDados();
-    sincronizarListaGruposUsuario();
   });
 
   btnExcluirGrupo.addEventListener('click', async () => {
@@ -1232,7 +1267,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
           const nomesImportados = importado.grupos.map((g) => `"${g.nome}"`).join(', ');
           const adicionarAosAtuais = confirm(
-            `JSON: ${importado.grupos.length} (${nomesImportados}).\n\nOK = Add to current & sync to cloud.\nCANCEL = Replace local list.`
+            `JSON: ${importado.grupos.length} (${nomesImportados}).\n\nOK = Add to current & sync to cloud.\nCANCEL = Replace list.`
           );
 
           if (adicionarAosAtuais) {
@@ -2371,26 +2406,36 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // --- AUTENTICAÇÃO E SINCRONIZAÇÃO DOS GRUPOS DA CONTA ---
-  let usuarioAtual = null;
-  let modoAuthAtual = 'login';
-
-  const btnAbrirAuth = document.getElementById('btn-abrir-auth');
+  // --- AUTENTICAÇÃO OBRIGATÓRIA E SINCRONIZAÇÃO DOS GRUPOS DA CONTA ---
+  const mainApp = document.getElementById('main-app');
+  const authGate = document.getElementById('auth-gate');
+  const langSwitcherGate = document.getElementById('lang-switcher-gate');
   const userLoggedBox = document.getElementById('user-logged-box');
   const userAvatar = document.getElementById('user-avatar');
   const userDisplayEmail = document.getElementById('user-display-email');
   const btnLogout = document.getElementById('btn-logout');
 
-  const modalAuth = document.getElementById('modal-auth');
-  const btnFecharAuth = document.getElementById('btn-fechar-auth');
   const btnLoginGoogle = document.getElementById('btn-login-google');
   const authModeTabs = document.getElementById('auth-mode-tabs');
   const authFeedback = document.getElementById('auth-feedback');
   const formAuth = document.getElementById('form-auth');
   const inputAuthEmail = document.getElementById('auth-email');
   const inputAuthPassword = document.getElementById('auth-password');
+  const chkManterConectado = document.getElementById('chk-manter-conectado');
   const btnResetSenha = document.getElementById('btn-reset-senha');
   const btnSubmitAuth = document.getElementById('btn-submit-auth');
+
+  if (langSwitcherGate) {
+    langSwitcherGate.addEventListener('click', (e) => {
+      const btn = e.target.closest('.lang-btn');
+      if (!btn) return;
+      const novoLang = btn.dataset.lang;
+      if (!I18N[novoLang] || novoLang === idiomaAtual) return;
+      idiomaAtual = novoLang;
+      localStorage.setItem(LANG_STORAGE_KEY, idiomaAtual);
+      aplicarIdiomaNaUI();
+    });
+  }
 
   function mostrarFeedbackAuth(msg, tipo = 'err') {
     authFeedback.textContent = msg;
@@ -2411,18 +2456,6 @@ document.addEventListener('DOMContentLoaded', () => {
     btnResetSenha.classList.toggle('hidden', modoAuthAtual !== 'login');
     limparFeedbackAuth();
   }
-
-  btnAbrirAuth.addEventListener('click', () => {
-    modoAuthAtual = 'login';
-    atualizarModoAuthUI();
-    modalAuth.classList.remove('hidden');
-    inputAuthEmail.focus();
-  });
-
-  btnFecharAuth.addEventListener('click', () => modalAuth.classList.add('hidden'));
-  modalAuth.addEventListener('click', (e) => {
-    if (e.target === modalAuth) modalAuth.classList.add('hidden');
-  });
 
   authModeTabs.addEventListener('click', (e) => {
     const tab = e.target.closest('.auth-tab');
@@ -2447,11 +2480,19 @@ document.addEventListener('DOMContentLoaded', () => {
     return `Erro de autenticação (${code}).`;
   }
 
+  async function aplicarPersistenciaEscolhida() {
+    const modoPersistencia =
+      chkManterConectado && !chkManterConectado.checked
+        ? browserSessionPersistence
+        : browserLocalPersistence;
+    await setPersistence(auth, modoPersistencia);
+  }
+
   btnLoginGoogle.addEventListener('click', async () => {
     limparFeedbackAuth();
     try {
+      await aplicarPersistenciaEscolhida();
       await signInWithPopup(auth, googleProvider);
-      modalAuth.classList.add('hidden');
     } catch (err) {
       mostrarFeedbackAuth(traduzirErroFirebaseAuth(err.code), 'err');
     }
@@ -2464,13 +2505,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const senha = inputAuthPassword.value;
 
     try {
+      await aplicarPersistenciaEscolhida();
       if (modoAuthAtual === 'login') {
         await signInWithEmailAndPassword(auth, email, senha);
       } else {
         await createUserWithEmailAndPassword(auth, email, senha);
       }
       inputAuthPassword.value = '';
-      modalAuth.classList.add('hidden');
     } catch (err) {
       mostrarFeedbackAuth(traduzirErroFirebaseAuth(err.code), 'err');
     }
@@ -2492,17 +2533,35 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   btnLogout.addEventListener('click', async () => {
-    await signOut(auth);
-    // Desconecta listeners antigos
-    Object.keys(unsubscribersNuvem).forEach((id) => {
-      if (unsubscribersNuvem[id]) unsubscribersNuvem[id]();
-      delete unsubscribersNuvem[id];
-    });
-    // Reinicia para um estado limpo local
-    appData = criarEstadoInicial();
-    salvarCacheLocal();
-    renderizarTudo();
-    conectarTodosGruposNuvem();
+    try {
+      // 1. Encerra listeners ativos do Firestore antes de sair
+      Object.keys(unsubscribersNuvem).forEach((id) => {
+        if (unsubscribersNuvem[id]) unsubscribersNuvem[id]();
+        delete unsubscribersNuvem[id];
+      });
+
+      const chaveContaAtual = getChaveCacheUsuario();
+      usuarioAtual = null;
+
+      // 2. Desloga da conta no Firebase Authentication (dados na nuvem permanecem salvos)
+      await signOut(auth);
+
+      // 3. Limpa o cache local desta conta e dados temporários
+      appData = criarEstadoInicial();
+      if (chaveContaAtual) localStorage.removeItem(chaveContaAtual);
+      localStorage.removeItem('raodev_split_grupos_v1');
+      localStorage.removeItem(LAST_PAYER_STORAGE_KEY);
+      sessionStorage.clear();
+
+      // 4. Limpa parâmetros de convite da URL e recarrega a página limpa
+      if (window.location.search) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+      window.location.reload();
+    } catch (err) {
+      console.error('Erro ao sair:', err);
+      window.location.reload();
+    }
   });
 
   async function sincronizarListaGruposUsuario() {
@@ -2526,11 +2585,19 @@ document.addEventListener('DOMContentLoaded', () => {
       );
     } catch (err) {
       console.error('Erro ao salvar lista de grupos do usuário:', err);
-      alert('Aviso: Não foi possível salvar seus grupos na conta. Verifique as regras do Firestore para a coleção "usuarios".');
     }
   }
 
   async function carregarGruposDaConta(user) {
+    // 1. Primeiro carrega o cache offline exclusivo deste UID (se existir) para abrir instantâneo
+    const cacheConta = carregarCacheLocalUsuario(user.uid);
+    if (cacheConta) {
+      appData = cacheConta;
+      renderizarTudo();
+      conectarTodosGruposNuvem();
+    }
+
+    // 2. Depois sincroniza com a lista oficial da conta no Firestore
     try {
       const userRef = doc(db, 'usuarios', user.uid);
       const snap = await getDoc(userRef);
@@ -2544,42 +2611,19 @@ document.addEventListener('DOMContentLoaded', () => {
         ultimoAtivoNuvem = dadosUser.ultimoGrupoAtivoId || null;
       }
 
-      // Só incorpora grupo local se veio de um link de convite (?grupo=...)
-      // ou se a conta na nuvem ainda estiver 100% vazia (primeiro acesso)
-      const gruposParaMigrar = [];
-      if (grupoUrlId) {
-        const gUrl = appData.grupos.find((g) => g.id === grupoUrlId);
-        if (gUrl && !idsNuvem.includes(grupoUrlId)) {
-          gruposParaMigrar.push(gUrl);
-        }
-      } else if (idsNuvem.length === 0) {
-        appData.grupos.forEach((g) => {
-          if (g.pessoas.length > 0 || g.gastos.length > 0 || g.nome !== 'Geral / Viagem') {
-            gruposParaMigrar.push(g);
-          }
-        });
+      if (grupoUrlId && !idsNuvem.includes(grupoUrlId)) {
+        idsNuvem.push(grupoUrlId);
       }
 
-      for (const gMigrar of gruposParaMigrar) {
-        if (gMigrar.nome !== 'Carregando grupo...') {
-          await enviarGrupoParaNuvem(gMigrar);
-        }
-      }
-
-      const todosIds = Array.from(
-        new Set([...idsNuvem, ...gruposParaMigrar.map((g) => g.id)])
-      );
-
-      // Desconecta listeners antigos do localStorage do aparelho
       Object.keys(unsubscribersNuvem).forEach((id) => {
-        if (!todosIds.includes(id)) {
+        if (!idsNuvem.includes(id)) {
           unsubscribersNuvem[id]();
           delete unsubscribersNuvem[id];
         }
       });
 
-      if (todosIds.length > 0) {
-        appData.grupos = todosIds.map((id) => {
+      if (idsNuvem.length > 0) {
+        appData.grupos = idsNuvem.map((id) => {
           const existente = appData.grupos.find((g) => g.id === id);
           return (
             existente || {
@@ -2591,15 +2635,14 @@ document.addEventListener('DOMContentLoaded', () => {
           );
         });
 
-        if (grupoUrlId && todosIds.includes(grupoUrlId)) {
+        if (grupoUrlId && idsNuvem.includes(grupoUrlId)) {
           appData.grupoAtivoId = grupoUrlId;
-        } else if (ultimoAtivoNuvem && todosIds.includes(ultimoAtivoNuvem)) {
+        } else if (ultimoAtivoNuvem && idsNuvem.includes(ultimoAtivoNuvem)) {
           appData.grupoAtivoId = ultimoAtivoNuvem;
         } else {
-          appData.grupoAtivoId = todosIds[0];
+          appData.grupoAtivoId = idsNuvem[0];
         }
-      } else {
-        // Conta nova sem nenhum grupo ainda
+      } else if (!cacheConta) {
         appData = criarEstadoInicial();
       }
 
@@ -2608,15 +2651,19 @@ document.addEventListener('DOMContentLoaded', () => {
       conectarTodosGruposNuvem();
       await sincronizarListaGruposUsuario();
     } catch (err) {
-      console.error('Erro ao carregar grupos da conta:', err);
-      alert('Erro ao carregar grupos da conta: ' + err.message);
+      console.warn('Sem rede ao buscar lista da conta, usando cache offline do usuário:', err);
+      if (!cacheConta) {
+        appData = criarEstadoInicial();
+        renderizarTudo();
+      }
     }
   }
 
   onAuthStateChanged(auth, async (user) => {
     usuarioAtual = user;
     if (user) {
-      btnAbrirAuth.classList.add('hidden');
+      authGate.classList.add('hidden');
+      mainApp.classList.remove('hidden');
       userLoggedBox.classList.remove('hidden');
       userDisplayEmail.textContent = user.displayName || user.email;
 
@@ -2629,13 +2676,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
       await carregarGruposDaConta(user);
     } else {
-      btnAbrirAuth.classList.remove('hidden');
-      userLoggedBox.classList.add('hidden');
+      Object.keys(unsubscribersNuvem).forEach((id) => {
+        if (unsubscribersNuvem[id]) unsubscribersNuvem[id]();
+        delete unsubscribersNuvem[id];
+      });
+      appData = criarEstadoInicial();
+      mainApp.classList.add('hidden');
+      authGate.classList.remove('hidden');
     }
   });
 
-  // Inicialização, idioma e conexão com Firebase
+  // Inicialização
   resetarDataGasto();
   aplicarIdiomaNaUI();
-  conectarTodosGruposNuvem();
 });
