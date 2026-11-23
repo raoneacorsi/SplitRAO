@@ -2535,15 +2535,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const userRef = doc(db, 'usuarios', user.uid);
       const snap = await getDoc(userRef);
 
-      // Considera grupos locais que tenham dados OU tenham sido renomeados pelo usuário
-      const gruposLocaisRelevantes = appData.grupos.filter(
-        (g) =>
-          g.pessoas.length > 0 ||
-          g.gastos.length > 0 ||
-          g.nome !== 'Geral / Viagem' ||
-          g.id === grupoUrlId
-      );
-
       let idsNuvem = [];
       let ultimoAtivoNuvem = null;
 
@@ -2553,19 +2544,42 @@ document.addEventListener('DOMContentLoaded', () => {
         ultimoAtivoNuvem = dadosUser.ultimoGrupoAtivoId || null;
       }
 
+      // Só incorpora grupo local se veio de um link de convite (?grupo=...)
+      // ou se a conta na nuvem ainda estiver 100% vazia (primeiro acesso)
+      const gruposParaMigrar = [];
+      if (grupoUrlId) {
+        const gUrl = appData.grupos.find((g) => g.id === grupoUrlId);
+        if (gUrl && !idsNuvem.includes(grupoUrlId)) {
+          gruposParaMigrar.push(gUrl);
+        }
+      } else if (idsNuvem.length === 0) {
+        appData.grupos.forEach((g) => {
+          if (g.pessoas.length > 0 || g.gastos.length > 0 || g.nome !== 'Geral / Viagem') {
+            gruposParaMigrar.push(g);
+          }
+        });
+      }
+
+      for (const gMigrar of gruposParaMigrar) {
+        if (gMigrar.nome !== 'Carregando grupo...') {
+          await enviarGrupoParaNuvem(gMigrar);
+        }
+      }
+
       const todosIds = Array.from(
-        new Set([...idsNuvem, ...gruposLocaisRelevantes.map((g) => g.id)])
+        new Set([...idsNuvem, ...gruposParaMigrar.map((g) => g.id)])
       );
 
-      if (todosIds.length > 0) {
-        // Garante que grupos locais novos sejam enviados para a coleção 'grupos' antes de ouvir
-        for (const gLocal of gruposLocaisRelevantes) {
-          if (!idsNuvem.includes(gLocal.id)) {
-            await enviarGrupoParaNuvem(gLocal);
-          }
+      // Desconecta listeners antigos do localStorage do aparelho
+      Object.keys(unsubscribersNuvem).forEach((id) => {
+        if (!todosIds.includes(id)) {
+          unsubscribersNuvem[id]();
+          delete unsubscribersNuvem[id];
         }
+      });
 
-        const novaLista = todosIds.map((id) => {
+      if (todosIds.length > 0) {
+        appData.grupos = todosIds.map((id) => {
           const existente = appData.grupos.find((g) => g.id === id);
           return (
             existente || {
@@ -2577,7 +2591,6 @@ document.addEventListener('DOMContentLoaded', () => {
           );
         });
 
-        appData.grupos = novaLista;
         if (grupoUrlId && todosIds.includes(grupoUrlId)) {
           appData.grupoAtivoId = grupoUrlId;
         } else if (ultimoAtivoNuvem && todosIds.includes(ultimoAtivoNuvem)) {
@@ -2585,12 +2598,14 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
           appData.grupoAtivoId = todosIds[0];
         }
-
-        salvarCacheLocal();
-        renderizarTudo();
-        conectarTodosGruposNuvem();
+      } else {
+        // Conta nova sem nenhum grupo ainda
+        appData = criarEstadoInicial();
       }
 
+      salvarCacheLocal();
+      renderizarTudo();
+      conectarTodosGruposNuvem();
       await sincronizarListaGruposUsuario();
     } catch (err) {
       console.error('Erro ao carregar grupos da conta:', err);
