@@ -44,15 +44,6 @@ const db = initializeFirestore(app, {
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
 
-// Registra Service Worker para abrir o app mesmo sem internet
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch((err) => {
-      console.warn('Service Worker não registrado:', err);
-    });
-  });
-}
-
 document.addEventListener('DOMContentLoaded', () => {
   const BASE_STORAGE_KEY = 'raodev_split_grupos_v2';
   const LAST_PAYER_STORAGE_KEY = 'raodev_split_last_payer_v1';
