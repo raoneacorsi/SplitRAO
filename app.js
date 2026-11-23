@@ -2,12 +2,24 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebas
 import {
   getFirestore,
   doc,
+  getDoc,
   setDoc,
   deleteDoc,
   onSnapshot
 } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+  signOut,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+import { LANG_STORAGE_KEY, I18N, createTranslator } from "./i18n.js";
 
-// Configuração do seu projeto Firebase (splitrao)
+// Configuração do projeto Firebase (splitrao)
 const firebaseConfig = {
   apiKey: "AIzaSyDheZEifsJ7WDQk9-l6wosXZuewyjyy3Sg",
   authDomain: "splitrao.firebaseapp.com",
@@ -19,585 +31,17 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
+const googleProvider = new GoogleAuthProvider();
 
 document.addEventListener('DOMContentLoaded', () => {
   const STORAGE_KEY = 'raodev_split_grupos_v1';
-  const LANG_STORAGE_KEY = 'raodev_split_lang_v1';
   const LAST_PAYER_STORAGE_KEY = 'raodev_split_last_payer_v1';
-
-  const I18N = {
-    pt: {
-      appSubtitle: 'Divisão inteligente de despesas em tempo real',
-      currentGroup: 'Grupo Atual',
-      renameGroupTitle: 'Renomear grupo atual',
-      newGroupBtn: '+ Grupo',
-      leaveDeleteBtn: 'Sair/Excluir',
-      copyCodeTitle: 'Clique para copiar o código do grupo',
-      codeCopiedBadge: '✅ Código copiado!',
-      inviteLinkBtn: '🔗 Convidar / Link',
-      codeBtn: '🔑 Código',
-      globalBalanceBtn: '🌐 Balanço Global',
-      backupBtn: '💾 Backup',
-      importBtn: '📂 Importar',
-      sec1Title: 'Participantes do Grupo',
-      personPlaceholder: 'Digite o nome (ex: Rodrigo, Jessica)...',
-      addPersonBtn: '+ Adicionar',
-      addExpenseExpandBtn: 'Incluir Novo Gasto',
-      sec2TitleNew: 'Registrar Novo Gasto',
-      sec2TitleEdit: 'Editar Despesa',
-      cancelEditBtn: 'Cancelar Edição',
-      collapseFormBtn: '▲ Fechar',
-      whatPaidLabel: 'O que foi pago?',
-      todayLabel: 'Hoje',
-      descPlaceholder: 'Ex: Supermercado, Combustível, Jantar...',
-      categoryLabel: 'Categoria',
-      optionalTag: '(opcional)',
-      autoDetectedTag: '✨ Auto',
-      clearSelectionBtn: 'Limpar seleção',
-      totalAmountLabel: 'Valor Total',
-      whoPaidLabel: 'Quem pagou?',
-      addSomeoneAbove: 'Adicione alguém acima',
-      fetchRateBtn: '🔄 Atualizar cotação',
-      convertedToBrlLabel: 'Equivalente no grupo:',
-      exchangeTitle: '💱 Câmbio (1 {curr} = R$)',
-      fetchingRateMsg: 'Buscando cotação atual...',
-      rateFetchedMsg: 'Cotação online atualizada ({curr} → BRL)',
-      rateErrorMsg: 'Sem internet/cotação indisponível. Digite a taxa manual.',
-      invalidRateAlert: 'Informe uma taxa de câmbio válida maior que zero.',
-      splitModeLabel: 'Modo de divisão:',
-      toggleAllBtn: 'Alternar todos',
-      modeEqual: '⚖️ Igual',
-      modeExact: '💲 Valor Exato',
-      modeShares: '📊 Por Cotas',
-      addPeopleStep1Hint: 'Adicione participantes na etapa 1 para selecionar.',
-      saveExpenseBtn: 'Salvar Despesa',
-      updateExpenseBtn: '✓ Atualizar Despesa',
-      sec3Title: 'Resumo e Acerto',
-      settleBtn: '💸 Quitar Conta',
-      reportBtn: '📄 Relatório',
-      whoPaysWhomHeading: 'Quem paga quem (Saldo pendente):',
-      sec4Title: 'Histórico do Grupo',
-      totalSpentBadge: 'Total Gasto',
-      viewHistoryBtn: '▼ Ver Histórico ({n} {items})',
-      collapseHistoryBtn: '▲ Recolher Histórico ({n} {items})',
-      entrySingular: 'lançamento',
-      entryPlural: 'lançamentos',
-      filterLabel: 'Filtrar:',
-      totalsBtn: '📊 Totais',
-      analyticalSummaryTitle: 'Resumo Analítico de Gastos',
-      globalModalTitle: '🌐 Balanço Global (Todos os Grupos)',
-      copyWhatsAppBtn: '📋 Copiar p/ WhatsApp',
-      copiedBtn: '✅ Copiado!',
-      closeBtn: 'Fechar',
-      settleModalTitle: '💸 Registrar Pagamento / Quitação',
-      settleModalDesc: 'Registre uma transferência feita entre participantes para abater total ou parcialmente uma dívida.',
-      settleFromLabel: 'Quem pagou? (Devedor)',
-      settleToLabel: 'Pagou para quem? (Recebedor)',
-      settleAmountLabel: 'Valor Pago (R$)',
-      settleNoteLabel: 'Observação (Opcional)',
-      settleNotePlaceholder: 'Ex: Pix parcial, Dinheiro...',
-      cancelBtn: 'Cancelar',
-      confirmPaymentBtn: 'Confirmar Pagamento',
-      printPdfBtn: '🖨️ Imprimir / PDF',
-      catCasa: 'Casa',
-      catComida: 'Comida',
-      catCarro: 'Carro',
-      catEntretenimento: 'Entretenimento',
-      catTransporte: 'Transporte',
-      catVida: 'Vida',
-      catNoCategory: 'Sem categoria',
-      filterAllCategories: 'Todas as categorias',
-      filterOnlySettlements: 'Apenas Acertos / Pagamentos',
-      statusConnecting: '🟡 Conectando à nuvem...',
-      statusSaving: '🟡 Salvando na nuvem...',
-      statusSyncedAt: '🟢 Sincronizado às {time}',
-      statusOffline: '🔴 Sem conexão com a nuvem (Modo Offline)',
-      statusSaveError: '🔴 Erro ao salvar na nuvem (verifique regras/internet)',
-      noParticipantsGroup: 'Nenhum participante cadastrado neste grupo.',
-      registerParticipantsSaldos: 'Cadastre participantes para ver os saldos.',
-      allSettledShort: 'Tudo quitado! Nenhuma transferência pendente.',
-      noEntriesFilter: 'Nenhum lançamento encontrado para este filtro.',
-      owesText: 'deve',
-      toText: 'para',
-      quickSettleBtn: '✓ Quitar',
-      settlementBadge: 'Acerto',
-      paidToText: 'pagou para',
-      paidByText: 'Pago por',
-      splitWithText: 'Dividido com',
-      modeExactBadge: 'Exato',
-      modeSharesBadge: 'Cotas',
-      sharesLabel: 'Cotas:',
-      selectAtLeastOne: 'Selecione pelo menos 1 pessoa.',
-      perPersonFeedback: '{val} por pessoa ({n} selecionados)',
-      typedSumFeedback: 'Soma digitada: {val} (Informe o valor total acima)',
-      exactMatchFeedback: '✓ Valores batem exatos com o total ({val})',
-      missingAmountFeedback: 'Falta distribuir: {diff} (Alocado: {sum})',
-      exceededAmountFeedback: 'Passou do total em {diff}!',
-      sharesZeroErr: 'A soma das cotas deve ser maior que zero.',
-      sharesRateFeedback: 'Total de {n} cota(s) • 1 cota = {val}',
-      sharesConfigFeedback: 'Total de {n} cota(s) configuradas.',
-      noExpensesToTotal: 'Nenhuma despesa lançada neste grupo para totalizar.',
-      filterPrefix: 'Filtro:',
-      allExpensesLabel: 'Todas as despesas',
-      groupTotalCard: 'Total Geral do Grupo',
-      activeFilterTotalCard: 'Total do Filtro Ativo',
-      avgExpenseCard: 'Média por Despesa',
-      byCategoryHeading: 'Por Categoria',
-      byMonthHeading: 'Por Mês',
-      noDateLabel: 'Sem data',
-      confirmDeleteExpense: 'Tem certeza que deseja apagar a despesa "{desc}" ({val})?',
-      confirmDeletePayment: 'Tem certeza que deseja apagar o pagamento de {from} para {to} ({val})?',
-      settlementDefaultDesc: 'Pagamento de acerto',
-      settlementObsDesc: 'Pagamento ({obs})',
-      reportTitlePrefix: 'Relatório',
-      reportGroupLabel: 'Grupo:',
-      reportDateLabel: 'Data:',
-      reportTotalExpensesLabel: 'Total Gasto em Despesas:',
-      reportSec1Title: '1. Pendências Restantes (Quem paga quem)',
-      reportAllSettled: 'Tudo quitado! Nenhuma pendência restante.',
-      reportStillOwes: 'ainda deve',
-      reportSec2Title: '2. Balanço Individual',
-      thParticipant: 'Participante',
-      thPaid: 'Pagou',
-      thConsumed: 'Consumiu',
-      thSettlements: 'Acertos',
-      thFinalBalance: 'Saldo Final',
-      reportSec3CatTitle: '3. Gastos por Categoria',
-      thCategory: 'Categoria',
-      thAmount: 'Valor',
-      thPctTotal: '% do Total',
-      reportExpensesExtract: 'Extrato de Despesas',
-      noExpensesRecorded: 'Nenhuma despesa registrada.',
-      thDate: 'Data',
-      thDescription: 'Descrição',
-      thPayer: 'Pagador',
-      reportPaymentsExtract: 'Pagamentos / Quitações Realizadas',
-      thMovement: 'Movimentação',
-      globalSummaryIntro: 'Consolidado de <strong>{n} grupo(s)</strong>, compensando automaticamente créditos e débitos cruzados entre grupos diferentes.',
-      globalSec1Title: '1. Acerto Final Consolidado (Quem paga quem)',
-      globalAllSettled: 'Tudo zerado no geral! Nenhuma dívida pendente entre os grupos.',
-      globalSec2Title: '2. Saldo Líquido por Pessoa (Detalhamento por Grupo)',
-      thGroupOrigin: 'Origem por Grupo',
-      thGlobalBalance: 'Saldo Global',
-      zeroedInAll: 'Zerado em todos',
-      wppReportHeader: '*📊 RELATÓRIO DE DESPESAS: {name}*',
-      wppTotalExpenses: '💰 *Total em Despesas:* {val}',
-      wppPendingHeader: '*💸 SALDO PENDENTE (QUEM PAGA QUEM):*',
-      wppAllSettled: '✅ Tudo quitado!',
-      wppPaysLine: '• *{from}* paga *{val}* para *{to}*',
-      wppCategoryHeader: '*🏷️ GASTOS POR CATEGORIA:*',
-      wppPaymentsHeader: '*🤝 PAGAMENTOS JÁ REALIZADOS:*',
-      wppExpensesHeader: '*🧾 DESPESAS LANÇADAS:*',
-      wppPaidBy: 'Pago por',
-      wppGlobalHeader: '*🌐 BALANÇO GLOBAL (TODOS OS GRUPOS)*',
-      wppGlobalGroups: '📊 Grupos somados:',
-      wppGlobalFinalHeader: '*💸 ACERTO FINAL COMPENSADO:*',
-      wppGlobalAllSettled: '✅ Tudo quitado no geral!',
-      wppGlobalPersonHeader: '*👤 SALDO LÍQUIDO POR PESSOA:*',
-      inviteMsg: 'Entra no nosso grupo "{name}" no RAODEV Split para lançarmos os gastos juntos:\n{link}\n\n(Código do grupo: {id})',
-      inviteCopiedAlert: '✅ Link de convite copiado!\n\nCole no WhatsApp do grupo para seus amigos entrarem:\n\n{link}',
-      enterCodePrompt: 'Cole o Código do Grupo (ex: grp_173198...) ou o link completo:',
-      renameGroupPrompt: 'Novo nome para o grupo:',
-      newGroupPrompt: 'Nome do novo grupo (ex: Viagem Atacama, Churrasco, Sítio):',
-      deleteGroupPrompt: 'Grupo "{name}":\n• Digite 1 para APENAS SAIR deste grupo no seu aparelho (mantém na nuvem para os amigos).\n• Digite 2 para EXCLUIR DEFINITIVAMENTE da nuvem para todos.\n• Deixe em branco para cancelar.',
-      deleteGroupConfirm: 'Tem certeza? Isso apagará "{name}" da nuvem para TODOS os participantes!',
-      personExistsAlert: 'Esse participante já está neste grupo.',
-      personInUseAlert: 'Não é possível remover "{name}" pois já participa de lançamentos neste grupo.',
-      need2PeopleAlert: 'É preciso ter pelo menos 2 participantes no grupo para registrar um pagamento.',
-      diffPeopleAlert: 'Quem paga e quem recebe devem ser pessoas diferentes.',
-      invalidAmountAlert: 'Informe um valor válido maior que zero.',
-      groupNotFoundAlert: 'Grupo não encontrado na nuvem. Verifique o link ou código.'
-    },
-    es: {
-      appSubtitle: 'División inteligente de gastos en tiempo real',
-      currentGroup: 'Grupo Actual',
-      renameGroupTitle: 'Renombrar grupo actual',
-      newGroupBtn: '+ Grupo',
-      leaveDeleteBtn: 'Salir/Eliminar',
-      copyCodeTitle: 'Haz clic para copiar el código del grupo',
-      codeCopiedBadge: '✅ ¡Código copiado!',
-      inviteLinkBtn: '🔗 Invitar / Enlace',
-      codeBtn: '🔑 Código',
-      globalBalanceBtn: '🌐 Balance Global',
-      backupBtn: '💾 Respaldo',
-      importBtn: '📂 Importar',
-      sec1Title: 'Participantes del Grupo',
-      personPlaceholder: 'Escribe el nombre (ej: Rodrigo, Jessica)...',
-      addPersonBtn: '+ Añadir',
-      addExpenseExpandBtn: 'Incluir Nuevo Gasto',
-      sec2TitleNew: 'Registrar Nuevo Gasto',
-      sec2TitleEdit: 'Editar Gasto',
-      cancelEditBtn: 'Cancelar Edición',
-      collapseFormBtn: '▲ Cerrar',
-      whatPaidLabel: '¿Qué se pagó?',
-      todayLabel: 'Hoy',
-      descPlaceholder: 'Ej: Supermercado, Combustible, Cena...',
-      categoryLabel: 'Categoría',
-      optionalTag: '(opcional)',
-      autoDetectedTag: '✨ Auto',
-      clearSelectionBtn: 'Limpiar selección',
-      totalAmountLabel: 'Monto Total',
-      whoPaidLabel: '¿Quién pagó?',
-      addSomeoneAbove: 'Añade a alguien arriba',
-      fetchRateBtn: '🔄 Actualizar cotización',
-      convertedToBrlLabel: 'Equivalente en el grupo:',
-      exchangeTitle: '💱 Cambio (1 {curr} = R$)',
-      fetchingRateMsg: 'Buscando cotización actual...',
-      rateFetchedMsg: 'Cotización online actualizada ({curr} → BRL)',
-      rateErrorMsg: 'Sin conexión/cotización no disponible. Ingresa la tasa manual.',
-      invalidRateAlert: 'Ingresa una tasa de cambio válida mayor que cero.',
-      splitModeLabel: 'Modo de división:',
-      toggleAllBtn: 'Alternar todos',
-      modeEqual: '⚖️ Igual',
-      modeExact: '💲 Monto Exacto',
-      modeShares: '📊 Por Cuotas',
-      addPeopleStep1Hint: 'Añade participantes en el paso 1 para seleccionar.',
-      saveExpenseBtn: 'Guardar Gasto',
-      updateExpenseBtn: '✓ Actualizar Gasto',
-      sec3Title: 'Resumen y Liquidación',
-      settleBtn: '💸 Liquidar Cuenta',
-      reportBtn: '📄 Informe',
-      whoPaysWhomHeading: 'Quién paga a quién (Saldo pendiente):',
-      sec4Title: 'Historial del Grupo',
-      totalSpentBadge: 'Total Gastado',
-      viewHistoryBtn: '▼ Ver Historial ({n} {items})',
-      collapseHistoryBtn: '▲ Ocultar Historial ({n} {items})',
-      entrySingular: 'registro',
-      entryPlural: 'registros',
-      filterLabel: 'Filtrar:',
-      totalsBtn: '📊 Totales',
-      analyticalSummaryTitle: 'Resumen Analítico de Gastos',
-      globalModalTitle: '🌐 Balance Global (Todos los Grupos)',
-      copyWhatsAppBtn: '📋 Copiar p/ WhatsApp',
-      copiedBtn: '✅ ¡Copiado!',
-      closeBtn: 'Cerrar',
-      settleModalTitle: '💸 Registrar Pago / Liquidación',
-      settleModalDesc: 'Registra una transferencia entre participantes para saldar total o parcialmente una deuda.',
-      settleFromLabel: '¿Quién pagó? (Deudor)',
-      settleToLabel: '¿Pagó a quién? (Receptor)',
-      settleAmountLabel: 'Monto Pagado (R$)',
-      settleNoteLabel: 'Observación (Opcional)',
-      settleNotePlaceholder: 'Ej: Transferencia parcial, Efectivo...',
-      cancelBtn: 'Cancelar',
-      confirmPaymentBtn: 'Confirmar Pago',
-      printPdfBtn: '🖨️ Imprimir / PDF',
-      catCasa: 'Casa',
-      catComida: 'Comida',
-      catCarro: 'Auto',
-      catEntretenimento: 'Entretenimiento',
-      catTransporte: 'Transporte',
-      catVida: 'Vida',
-      catNoCategory: 'Sin categoría',
-      filterAllCategories: 'Todas las categorías',
-      filterOnlySettlements: 'Solo Liquidaciones / Pagos',
-      statusConnecting: '🟡 Conectando a la nube...',
-      statusSaving: '🟡 Guardando en la nube...',
-      statusSyncedAt: '🟢 Sincronizado a las {time}',
-      statusOffline: '🔴 Sin conexión con la nube (Modo Offline)',
-      statusSaveError: '🔴 Error al guardar en la nube (revisa reglas/internet)',
-      noParticipantsGroup: 'Ningún participante registrado en este grupo.',
-      registerParticipantsSaldos: 'Registra participantes para ver los saldos.',
-      allSettledShort: '¡Todo liquidado! Ninguna transferencia pendiente.',
-      noEntriesFilter: 'No se encontraron registros para este filtro.',
-      owesText: 'debe',
-      toText: 'a',
-      quickSettleBtn: '✓ Liquidar',
-      settlementBadge: 'Pago',
-      paidToText: 'pagó a',
-      paidByText: 'Pagado por',
-      splitWithText: 'Dividido con',
-      modeExactBadge: 'Exacto',
-      modeSharesBadge: 'Cuotas',
-      sharesLabel: 'Cuotas:',
-      selectAtLeastOne: 'Selecciona al menos 1 persona.',
-      perPersonFeedback: '{val} por persona ({n} seleccionados)',
-      typedSumFeedback: 'Suma ingresada: {val} (Ingresa el monto total arriba)',
-      exactMatchFeedback: '✓ Los montos coinciden exactamente con el total ({val})',
-      missingAmountFeedback: 'Falta distribuir: {diff} (Asignado: {sum})',
-      exceededAmountFeedback: '¡Excedió el total en {diff}!',
-      sharesZeroErr: 'La suma de las cuotas debe ser mayor que cero.',
-      sharesRateFeedback: 'Total de {n} cuota(s) • 1 cuota = {val}',
-      sharesConfigFeedback: 'Total de {n} cuota(s) configuradas.',
-      noExpensesToTotal: 'Ningún gasto registrado en este grupo para totalizar.',
-      filterPrefix: 'Filtro:',
-      allExpensesLabel: 'Todos los gastos',
-      groupTotalCard: 'Total General del Grupo',
-      activeFilterTotalCard: 'Total del Filtro Activo',
-      avgExpenseCard: 'Promedio por Gasto',
-      byCategoryHeading: 'Por Categoría',
-      byMonthHeading: 'Por Mes',
-      noDateLabel: 'Sin fecha',
-      confirmDeleteExpense: '¿Seguro que deseas eliminar el gasto "{desc}" ({val})?',
-      confirmDeletePayment: '¿Seguro que deseas eliminar el pago de {from} a {to} ({val})?',
-      settlementDefaultDesc: 'Pago de liquidación',
-      settlementObsDesc: 'Pago ({obs})',
-      reportTitlePrefix: 'Informe',
-      reportGroupLabel: 'Grupo:',
-      reportDateLabel: 'Fecha:',
-      reportTotalExpensesLabel: 'Total Gastado en Gastos:',
-      reportSec1Title: '1. Pendientes Restantes (Quién paga a quién)',
-      reportAllSettled: '¡Todo liquidado! Ningún saldo pendiente.',
-      reportStillOwes: 'aún debe',
-      reportSec2Title: '2. Balance Individual',
-      thParticipant: 'Participante',
-      thPaid: 'Pagó',
-      thConsumed: 'Consumió',
-      thSettlements: 'Pagos',
-      thFinalBalance: 'Saldo Final',
-      reportSec3CatTitle: '3. Gastos por Categoría',
-      thCategory: 'Categoría',
-      thAmount: 'Monto',
-      thPctTotal: '% del Total',
-      reportExpensesExtract: 'Extracto de Gastos',
-      noExpensesRecorded: 'Ningún gasto registrado.',
-      thDate: 'Fecha',
-      thDescription: 'Descripción',
-      thPayer: 'Pagador',
-      reportPaymentsExtract: 'Pagos / Liquidaciones Realizadas',
-      thMovement: 'Movimiento',
-      globalSummaryIntro: 'Consolidado de <strong>{n} grupo(s)</strong>, compensando automáticamente créditos y deudas cruzadas entre grupos distintos.',
-      globalSec1Title: '1. Liquidación Final Consolidada (Quién paga a quién)',
-      globalAllSettled: '¡Todo en cero en general! Ninguna deuda pendiente entre grupos.',
-      globalSec2Title: '2. Saldo Neto por Persona (Detalle por Grupo)',
-      thGroupOrigin: 'Origen por Grupo',
-      thGlobalBalance: 'Saldo Global',
-      zeroedInAll: 'En cero en todos',
-      wppReportHeader: '*📊 INFORME DE GASTOS: {name}*',
-      wppTotalExpenses: '💰 *Total en Gastos:* {val}',
-      wppPendingHeader: '*💸 SALDO PENDIENTE (QUIÉN PAGA A QUIÉN):*',
-      wppAllSettled: '✅ ¡Todo liquidado!',
-      wppPaysLine: '• *{from}* paga *{val}* a *{to}*',
-      wppCategoryHeader: '*🏷️ GASTOS POR CATEGORIA:*',
-      wppPaymentsHeader: '*🤝 PAGOS YA REALIZADOS:*',
-      wppExpensesHeader: '*🧾 GASTOS REGISTRADOS:*',
-      wppPaidBy: 'Pagado por',
-      wppGlobalHeader: '*🌐 BALANCE GLOBAL (TODOS LOS GRUPOS)*',
-      wppGlobalGroups: '📊 Grupos sumados:',
-      wppGlobalFinalHeader: '*💸 LIQUIDACIÓN FINAL COMPENSADA:*',
-      wppGlobalAllSettled: '✅ ¡Todo liquidado en general!',
-      wppGlobalPersonHeader: '*👤 SALDO NETO POR PERSONA:*',
-      inviteMsg: 'Únete a nuestro grupo "{name}" en RAODEV Split para registrar los gastos juntos:\n{link}\n\n(Código del grupo: {id})',
-      inviteCopiedAlert: '✅ ¡Enlace de invitación copiado!\n\nPégalo en WhatsApp para que tus amigos entren:\n\n{link}',
-      enterCodePrompt: 'Pega el Código del Grupo (ej: grp_173198...) o el enlace completo:',
-      renameGroupPrompt: 'Nuevo nombre para el grupo:',
-      newGroupPrompt: 'Nombre del nuevo grupo (ej: Viaje Atacama, Asado, Campo):',
-      deleteGroupPrompt: 'Grupo "{name}":\n• Escribe 1 para SOLO SALIR de este grupo en tu dispositivo (se mantiene en la nube para los demás).\n• Escribe 2 para ELIMINAR DEFINITIVAMENTE de la nube para todos.\n• Deja en blanco para cancelar.',
-      deleteGroupConfirm: '¿Estás seguro? ¡Esto borrará "{name}" de la nube para TODOS los participantes!',
-      personExistsAlert: 'Este participante ya está en este grupo.',
-      personInUseAlert: 'No se puede eliminar a "{name}" porque ya participa en registros de este grupo.',
-      need2PeopleAlert: 'Se necesitan al menos 2 participantes en el grupo para registrar un pago.',
-      diffPeopleAlert: 'Quien paga y quien recibe deben ser personas diferentes.',
-      invalidAmountAlert: 'Ingresa un monto válido mayor que cero.',
-      groupNotFoundAlert: 'Grupo no encontrado en la nube. Verifica el enlace o código.'
-    },
-    en: {
-      appSubtitle: 'Smart real-time expense splitting',
-      currentGroup: 'Current Group',
-      renameGroupTitle: 'Rename current group',
-      newGroupBtn: '+ Group',
-      leaveDeleteBtn: 'Leave/Delete',
-      copyCodeTitle: 'Click to copy group code',
-      codeCopiedBadge: '✅ Code copied!',
-      inviteLinkBtn: '🔗 Invite / Link',
-      codeBtn: '🔑 Code',
-      globalBalanceBtn: '🌐 Global Balance',
-      backupBtn: '💾 Backup',
-      importBtn: '📂 Import',
-      sec1Title: 'Group Participants',
-      personPlaceholder: 'Enter name (e.g., Rodrigo, Jessica)...',
-      addPersonBtn: '+ Add',
-      addExpenseExpandBtn: 'Add New Expense',
-      sec2TitleNew: 'Record New Expense',
-      sec2TitleEdit: 'Edit Expense',
-      cancelEditBtn: 'Cancel Edit',
-      collapseFormBtn: '▲ Close',
-      whatPaidLabel: 'What was paid?',
-      todayLabel: 'Today',
-      descPlaceholder: 'E.g., Groceries, Fuel, Dinner...',
-      categoryLabel: 'Category',
-      optionalTag: '(optional)',
-      autoDetectedTag: '✨ Auto',
-      clearSelectionBtn: 'Clear selection',
-      totalAmountLabel: 'Total Amount',
-      whoPaidLabel: 'Who paid?',
-      addSomeoneAbove: 'Add someone above',
-      fetchRateBtn: '🔄 Refresh rate',
-      convertedToBrlLabel: 'Group equivalent:',
-      exchangeTitle: '💱 Exchange Rate (1 {curr} = R$)',
-      fetchingRateMsg: 'Fetching live rate...',
-      rateFetchedMsg: 'Live rate updated ({curr} → BRL)',
-      rateErrorMsg: 'Offline/rate unavailable. Enter manual rate.',
-      invalidRateAlert: 'Please enter a valid exchange rate greater than zero.',
-      splitModeLabel: 'Split mode:',
-      toggleAllBtn: 'Toggle all',
-      modeEqual: '⚖️ Equal',
-      modeExact: '💲 Exact Amount',
-      modeShares: '📊 By Shares',
-      addPeopleStep1Hint: 'Add participants in step 1 to select.',
-      saveExpenseBtn: 'Save Expense',
-      updateExpenseBtn: '✓ Update Expense',
-      sec3Title: 'Summary & Settlement',
-      settleBtn: '💸 Settle Up',
-      reportBtn: '📄 Report',
-      whoPaysWhomHeading: 'Who pays whom (Pending balance):',
-      sec4Title: 'Group History',
-      totalSpentBadge: 'Total Spent',
-      viewHistoryBtn: '▼ View History ({n} {items})',
-      collapseHistoryBtn: '▲ Hide History ({n} {items})',
-      entrySingular: 'entry',
-      entryPlural: 'entries',
-      filterLabel: 'Filter:',
-      totalsBtn: '📊 Totals',
-      analyticalSummaryTitle: 'Analytical Expense Summary',
-      globalModalTitle: '🌐 Global Balance (All Groups)',
-      copyWhatsAppBtn: '📋 Copy for WhatsApp',
-      copiedBtn: '✅ Copied!',
-      closeBtn: 'Close',
-      settleModalTitle: '💸 Record Payment / Settlement',
-      settleModalDesc: 'Record a transfer between participants to fully or partially settle a debt.',
-      settleFromLabel: 'Who paid? (Debtor)',
-      settleToLabel: 'Paid to whom? (Recipient)',
-      settleAmountLabel: 'Amount Paid (R$)',
-      settleNoteLabel: 'Note (Optional)',
-      settleNotePlaceholder: 'E.g., Partial transfer, Cash...',
-      cancelBtn: 'Cancel',
-      confirmPaymentBtn: 'Confirm Payment',
-      printPdfBtn: '🖨️ Print / PDF',
-      catCasa: 'Home',
-      catComida: 'Food',
-      catCarro: 'Car',
-      catEntretenimento: 'Entertainment',
-      catTransporte: 'Transport',
-      catVida: 'Life',
-      catNoCategory: 'Uncategorized',
-      filterAllCategories: 'All categories',
-      filterOnlySettlements: 'Settlements / Payments only',
-      statusConnecting: '🟡 Connecting to cloud...',
-      statusSaving: '🟡 Saving to cloud...',
-      statusSyncedAt: '🟢 Synced at {time}',
-      statusOffline: '🔴 No cloud connection (Offline Mode)',
-      statusSaveError: '🔴 Error saving to cloud (check rules/internet)',
-      noParticipantsGroup: 'No participants registered in this group.',
-      registerParticipantsSaldos: 'Add participants to see balances.',
-      allSettledShort: 'All settled up! No pending transfers.',
-      noEntriesFilter: 'No entries found for this filter.',
-      owesText: 'owes',
-      toText: 'to',
-      quickSettleBtn: '✓ Settle',
-      settlementBadge: 'Settlement',
-      paidToText: 'paid to',
-      paidByText: 'Paid by',
-      splitWithText: 'Split with',
-      modeExactBadge: 'Exact',
-      modeSharesBadge: 'Shares',
-      sharesLabel: 'Shares:',
-      selectAtLeastOne: 'Select at least 1 person.',
-      perPersonFeedback: '{val} per person ({n} selected)',
-      typedSumFeedback: 'Entered sum: {val} (Enter total amount above)',
-      exactMatchFeedback: '✓ Amounts match total exactly ({val})',
-      missingAmountFeedback: 'Remaining to allocate: {diff} (Allocated: {sum})',
-      exceededAmountFeedback: 'Exceeded total by {diff}!',
-      sharesZeroErr: 'Total shares must be greater than zero.',
-      sharesRateFeedback: 'Total of {n} share(s) • 1 share = {val}',
-      sharesConfigFeedback: 'Total of {n} share(s) configured.',
-      noExpensesToTotal: 'No expenses recorded in this group to summarize.',
-      filterPrefix: 'Filter:',
-      allExpensesLabel: 'All expenses',
-      groupTotalCard: 'Group Grand Total',
-      activeFilterTotalCard: 'Active Filter Total',
-      avgExpenseCard: 'Average per Expense',
-      byCategoryHeading: 'By Category',
-      byMonthHeading: 'By Month',
-      noDateLabel: 'No date',
-      confirmDeleteExpense: 'Are you sure you want to delete expense "{desc}" ({val})?',
-      confirmDeletePayment: 'Are you sure you want to delete payment from {from} to {to} ({val})?',
-      settlementDefaultDesc: 'Settlement payment',
-      settlementObsDesc: 'Payment ({obs})',
-      reportTitlePrefix: 'Report',
-      reportGroupLabel: 'Group:',
-      reportDateLabel: 'Date:',
-      reportTotalExpensesLabel: 'Total Spent on Expenses:',
-      reportSec1Title: '1. Remaining Balances (Who pays whom)',
-      reportAllSettled: 'All settled up! No pending balances.',
-      reportStillOwes: 'still owes',
-      reportSec2Title: '2. Individual Balance',
-      thParticipant: 'Participant',
-      thPaid: 'Paid',
-      thConsumed: 'Consumed',
-      thSettlements: 'Settlements',
-      thFinalBalance: 'Final Balance',
-      reportSec3CatTitle: '3. Expenses by Category',
-      thCategory: 'Category',
-      thAmount: 'Amount',
-      thPctTotal: '% of Total',
-      reportExpensesExtract: 'Expense Statement',
-      noExpensesRecorded: 'No expenses recorded.',
-      thDate: 'Date',
-      thDescription: 'Description',
-      thPayer: 'Payer',
-      reportPaymentsExtract: 'Completed Payments / Settlements',
-      thMovement: 'Movement',
-      globalSummaryIntro: 'Consolidated across <strong>{n} group(s)</strong>, automatically offsetting cross-group credits and debts.',
-      globalSec1Title: '1. Consolidated Final Settlement (Who pays whom)',
-      globalAllSettled: 'All zeroed out overall! No pending debts across groups.',
-      globalSec2Title: '2. Net Balance per Person (Breakdown by Group)',
-      thGroupOrigin: 'Origin by Group',
-      thGlobalBalance: 'Global Balance',
-      zeroedInAll: 'Zeroed in all',
-      wppReportHeader: '*📊 EXPENSE REPORT: {name}*',
-      wppTotalExpenses: '💰 *Total Expenses:* {val}',
-      wppPendingHeader: '*💸 PENDING BALANCE (WHO PAYS WHOM):*',
-      wppAllSettled: '✅ All settled up!',
-      wppPaysLine: '• *{from}* pays *{val}* to *{to}*',
-      wppCategoryHeader: '*🏷️ EXPENSES BY CATEGORY:*',
-      wppPaymentsHeader: '*🤝 COMPLETED PAYMENTS:*',
-      wppExpensesHeader: '*🧾 RECORDED EXPENSES:*',
-      wppPaidBy: 'Paid by',
-      wppGlobalHeader: '*🌐 GLOBAL BALANCE (ALL GROUPS)*',
-      wppGlobalGroups: '📊 Combined groups:',
-      wppGlobalFinalHeader: '*💸 CONSOLIDATED FINAL SETTLEMENT:*',
-      wppGlobalAllSettled: '✅ All settled up overall!',
-      wppGlobalPersonHeader: '*👤 NET BALANCE PER PERSON:*',
-      inviteMsg: 'Join our group "{name}" on RAODEV Split to track expenses together:\n{link}\n\n(Group code: {id})',
-      inviteCopiedAlert: '✅ Invite link copied!\n\nPaste it on WhatsApp so your friends can join:\n\n{link}',
-      enterCodePrompt: 'Paste the Group Code (e.g., grp_173198...) or full link:',
-      renameGroupPrompt: 'New name for the group:',
-      newGroupPrompt: 'New group name (e.g., Atacama Trip, BBQ, Cabin):',
-      deleteGroupPrompt: 'Group "{name}":\n• Type 1 to ONLY LEAVE this group on your device (stays in the cloud for friends).\n• Type 2 to PERMANENTLY DELETE from the cloud for everyone.\n• Leave blank to cancel.',
-      deleteGroupConfirm: 'Are you sure? This will delete "{name}" from the cloud for ALL participants!',
-      personExistsAlert: 'This participant is already in this group.',
-      personInUseAlert: 'Cannot remove "{name}" because they are part of entries in this group.',
-      need2PeopleAlert: 'You need at least 2 participants in the group to record a payment.',
-      diffPeopleAlert: 'Payer and recipient must be different people.',
-      invalidAmountAlert: 'Please enter a valid amount greater than zero.',
-      groupNotFoundAlert: 'Group not found in the cloud. Check the link or code.'
-    }
-  };
 
   let idiomaAtual = localStorage.getItem(LANG_STORAGE_KEY) || 'pt';
   if (!I18N[idiomaAtual]) idiomaAtual = 'pt';
 
-  function t(chave, vars = {}) {
-    const dict = I18N[idiomaAtual] || I18N.pt;
-    let str = dict[chave] !== undefined ? dict[chave] : (I18N.pt[chave] || chave);
-    for (const [k, v] of Object.entries(vars)) {
-      str = str.replaceAll(`{${k}}`, v);
-    }
-    return str;
-  }
-
-  function getNomeCategoriaTraduzido(catId) {
-    if (!catId || catId === 'Sem categoria') return t('catNoCategory');
-    const mapKey = {
-      Casa: 'catCasa',
-      Comida: 'catComida',
-      Carro: 'catCarro',
-      Entretenimento: 'catEntretenimento',
-      Transporte: 'catTransporte',
-      Vida: 'catVida'
-    };
-    return mapKey[catId] ? t(mapKey[catId]) : catId;
-  }
+  const { t, getNomeCategoriaTraduzido } = createTranslator(() => idiomaAtual);
 
   const CATEGORIAS = [
     {
@@ -1120,6 +564,7 @@ document.addEventListener('DOMContentLoaded', () => {
     appData.grupoAtivoId = codigo;
     salvarCacheLocal();
     conectarGrupoNuvem(codigo);
+    sincronizarListaGruposUsuario();
     renderizarTudo();
   });
 
@@ -1299,7 +744,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // --- BALANÇO GLOBAL (CONSOLIDADO ENTRE TODOS OS GRUPOS) ---
+  // --- BALANÇO GLOBAL ---
   let textoGlobalWhatsApp = '';
 
   function calcularBalancoGlobal() {
@@ -1682,6 +1127,7 @@ document.addEventListener('DOMContentLoaded', () => {
     filtroCategoriaSelect.value = 'todas';
     appData.grupoAtivoId = e.target.value;
     salvarCacheLocal();
+    sincronizarListaGruposUsuario();
     renderizarTudo();
   });
 
@@ -1712,6 +1158,7 @@ document.addEventListener('DOMContentLoaded', () => {
     appData.grupoAtivoId = novoId;
     conectarGrupoNuvem(novoId);
     salvarDados();
+    sincronizarListaGruposUsuario();
   });
 
   btnExcluirGrupo.addEventListener('click', async () => {
@@ -1732,6 +1179,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       appData.grupoAtivoId = appData.grupos[0].id;
       salvarCacheLocal();
+      sincronizarListaGruposUsuario();
       renderizarTudo();
     } else if (acao === '2') {
       if (confirm(t('deleteGroupConfirm', { name: grupo.nome }))) {
@@ -1751,12 +1199,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         appData.grupoAtivoId = appData.grupos[0].id;
         salvarCacheLocal();
+        sincronizarListaGruposUsuario();
         renderizarTudo();
       }
     }
   });
 
-  // --- BACKUP E IMPORTAÇÃO INTELIGENTE ---
+  // --- BACKUP E IMPORTAÇÃO ---
   btnExportarJson.addEventListener('click', () => {
     const dataStr = JSON.stringify(appData, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
@@ -1804,6 +1253,7 @@ document.addEventListener('DOMContentLoaded', () => {
               conectarGrupoNuvem(g.id);
             }
           }
+          sincronizarListaGruposUsuario();
         } else {
           alert('Invalid JSON file.');
         }
@@ -2347,7 +1797,7 @@ document.addEventListener('DOMContentLoaded', () => {
     salvarDados();
   });
 
-  // Ações no Histórico (Editar ou Excluir com confirmação)
+  // Ações no Histórico
   listaGastos.addEventListener('click', (e) => {
     const btnEdit = e.target.closest('.btn-edit-gasto');
     if (btnEdit) {
@@ -2512,7 +1962,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let html = `
       <div class="rel-section">
-        <p><strong>${t('reportGroupLabel')}</strong> ${grupo.nome}  |  <strong>${t('reportDateLabel')}</strong> ${dataEmissao}</p>
+        <p><strong>${t('reportGroupLabel')}</strong> ${grupo.nome}  |  <strong>${t('reportDateLabel')}</strong> ${dataEmissao}</p>
         <p><strong>${t('reportTotalExpensesLabel')}</strong> ${formatarMoeda(totalGeralDespesas)}</p>
       </div>
 
@@ -2735,7 +2185,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   btnImprimir.addEventListener('click', () => window.print());
 
-  // --- RENDERIZAÇÃO DO HISTÓRICO (COM FILTRO) ---
+  // --- RENDERIZAÇÃO DO HISTÓRICO ---
   function renderizarHistorico() {
     const grupo = getGrupoAtivo();
 
@@ -2920,6 +2370,254 @@ document.addEventListener('DOMContentLoaded', () => {
       renderizarPainelTotais();
     }
   }
+
+  // --- AUTENTICAÇÃO E SINCRONIZAÇÃO DOS GRUPOS DA CONTA ---
+  let usuarioAtual = null;
+  let modoAuthAtual = 'login';
+
+  const btnAbrirAuth = document.getElementById('btn-abrir-auth');
+  const userLoggedBox = document.getElementById('user-logged-box');
+  const userAvatar = document.getElementById('user-avatar');
+  const userDisplayEmail = document.getElementById('user-display-email');
+  const btnLogout = document.getElementById('btn-logout');
+
+  const modalAuth = document.getElementById('modal-auth');
+  const btnFecharAuth = document.getElementById('btn-fechar-auth');
+  const btnLoginGoogle = document.getElementById('btn-login-google');
+  const authModeTabs = document.getElementById('auth-mode-tabs');
+  const authFeedback = document.getElementById('auth-feedback');
+  const formAuth = document.getElementById('form-auth');
+  const inputAuthEmail = document.getElementById('auth-email');
+  const inputAuthPassword = document.getElementById('auth-password');
+  const btnResetSenha = document.getElementById('btn-reset-senha');
+  const btnSubmitAuth = document.getElementById('btn-submit-auth');
+
+  function mostrarFeedbackAuth(msg, tipo = 'err') {
+    authFeedback.textContent = msg;
+    authFeedback.className = `auth-feedback ${tipo}`;
+    authFeedback.classList.remove('hidden');
+  }
+
+  function limparFeedbackAuth() {
+    authFeedback.classList.add('hidden');
+  }
+
+  function atualizarModoAuthUI() {
+    authModeTabs.querySelectorAll('.auth-tab').forEach((tab) => {
+      tab.classList.toggle('active', tab.dataset.authMode === modoAuthAtual);
+    });
+    btnSubmitAuth.textContent =
+      modoAuthAtual === 'login' ? t('authSubmitLoginBtn') : t('authSubmitRegisterBtn');
+    btnResetSenha.classList.toggle('hidden', modoAuthAtual !== 'login');
+    limparFeedbackAuth();
+  }
+
+  btnAbrirAuth.addEventListener('click', () => {
+    modoAuthAtual = 'login';
+    atualizarModoAuthUI();
+    modalAuth.classList.remove('hidden');
+    inputAuthEmail.focus();
+  });
+
+  btnFecharAuth.addEventListener('click', () => modalAuth.classList.add('hidden'));
+  modalAuth.addEventListener('click', (e) => {
+    if (e.target === modalAuth) modalAuth.classList.add('hidden');
+  });
+
+  authModeTabs.addEventListener('click', (e) => {
+    const tab = e.target.closest('.auth-tab');
+    if (!tab) return;
+    modoAuthAtual = tab.dataset.authMode;
+    atualizarModoAuthUI();
+  });
+
+  function traduzirErroFirebaseAuth(code) {
+    if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
+      return 'E-mail ou senha incorretos.';
+    }
+    if (code === 'auth/email-already-in-use') {
+      return 'Este e-mail já está cadastrado. Tente entrar.';
+    }
+    if (code === 'auth/weak-password') {
+      return 'A senha deve ter pelo menos 6 caracteres.';
+    }
+    if (code === 'auth/popup-closed-by-user') {
+      return 'Janela de login fechada antes de concluir.';
+    }
+    return `Erro de autenticação (${code}).`;
+  }
+
+  btnLoginGoogle.addEventListener('click', async () => {
+    limparFeedbackAuth();
+    try {
+      await signInWithPopup(auth, googleProvider);
+      modalAuth.classList.add('hidden');
+    } catch (err) {
+      mostrarFeedbackAuth(traduzirErroFirebaseAuth(err.code), 'err');
+    }
+  });
+
+  formAuth.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    limparFeedbackAuth();
+    const email = inputAuthEmail.value.trim();
+    const senha = inputAuthPassword.value;
+
+    try {
+      if (modoAuthAtual === 'login') {
+        await signInWithEmailAndPassword(auth, email, senha);
+      } else {
+        await createUserWithEmailAndPassword(auth, email, senha);
+      }
+      inputAuthPassword.value = '';
+      modalAuth.classList.add('hidden');
+    } catch (err) {
+      mostrarFeedbackAuth(traduzirErroFirebaseAuth(err.code), 'err');
+    }
+  });
+
+  btnResetSenha.addEventListener('click', async () => {
+    const email = inputAuthEmail.value.trim();
+    if (!email) {
+      mostrarFeedbackAuth(t('authEnterEmailFirst'), 'err');
+      inputAuthEmail.focus();
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, email);
+      mostrarFeedbackAuth(t('authResetSentMsg'), 'ok');
+    } catch (err) {
+      mostrarFeedbackAuth(traduzirErroFirebaseAuth(err.code), 'err');
+    }
+  });
+
+  btnLogout.addEventListener('click', async () => {
+    await signOut(auth);
+    // Desconecta listeners antigos
+    Object.keys(unsubscribersNuvem).forEach((id) => {
+      if (unsubscribersNuvem[id]) unsubscribersNuvem[id]();
+      delete unsubscribersNuvem[id];
+    });
+    // Reinicia para um estado limpo local
+    appData = criarEstadoInicial();
+    salvarCacheLocal();
+    renderizarTudo();
+    conectarTodosGruposNuvem();
+  });
+
+  async function sincronizarListaGruposUsuario() {
+    if (!usuarioAtual) return;
+    try {
+      const userRef = doc(db, 'usuarios', usuarioAtual.uid);
+      const gruposIds = appData.grupos
+        .filter((g) => g.nome !== 'Carregando grupo...')
+        .map((g) => g.id);
+
+      await setDoc(
+        userRef,
+        {
+          email: usuarioAtual.email || '',
+          nome: usuarioAtual.displayName || '',
+          gruposIds,
+          ultimoGrupoAtivoId: appData.grupoAtivoId,
+          atualizadoEm: new Date().toISOString()
+        },
+        { merge: true }
+      );
+    } catch (err) {
+      console.error('Erro ao salvar lista de grupos do usuário:', err);
+      alert('Aviso: Não foi possível salvar seus grupos na conta. Verifique as regras do Firestore para a coleção "usuarios".');
+    }
+  }
+
+  async function carregarGruposDaConta(user) {
+    try {
+      const userRef = doc(db, 'usuarios', user.uid);
+      const snap = await getDoc(userRef);
+
+      // Considera grupos locais que tenham dados OU tenham sido renomeados pelo usuário
+      const gruposLocaisRelevantes = appData.grupos.filter(
+        (g) =>
+          g.pessoas.length > 0 ||
+          g.gastos.length > 0 ||
+          g.nome !== 'Geral / Viagem' ||
+          g.id === grupoUrlId
+      );
+
+      let idsNuvem = [];
+      let ultimoAtivoNuvem = null;
+
+      if (snap.exists()) {
+        const dadosUser = snap.data();
+        idsNuvem = Array.isArray(dadosUser.gruposIds) ? dadosUser.gruposIds : [];
+        ultimoAtivoNuvem = dadosUser.ultimoGrupoAtivoId || null;
+      }
+
+      const todosIds = Array.from(
+        new Set([...idsNuvem, ...gruposLocaisRelevantes.map((g) => g.id)])
+      );
+
+      if (todosIds.length > 0) {
+        // Garante que grupos locais novos sejam enviados para a coleção 'grupos' antes de ouvir
+        for (const gLocal of gruposLocaisRelevantes) {
+          if (!idsNuvem.includes(gLocal.id)) {
+            await enviarGrupoParaNuvem(gLocal);
+          }
+        }
+
+        const novaLista = todosIds.map((id) => {
+          const existente = appData.grupos.find((g) => g.id === id);
+          return (
+            existente || {
+              id,
+              nome: 'Carregando grupo...',
+              pessoas: [],
+              gastos: []
+            }
+          );
+        });
+
+        appData.grupos = novaLista;
+        if (grupoUrlId && todosIds.includes(grupoUrlId)) {
+          appData.grupoAtivoId = grupoUrlId;
+        } else if (ultimoAtivoNuvem && todosIds.includes(ultimoAtivoNuvem)) {
+          appData.grupoAtivoId = ultimoAtivoNuvem;
+        } else {
+          appData.grupoAtivoId = todosIds[0];
+        }
+
+        salvarCacheLocal();
+        renderizarTudo();
+        conectarTodosGruposNuvem();
+      }
+
+      await sincronizarListaGruposUsuario();
+    } catch (err) {
+      console.error('Erro ao carregar grupos da conta:', err);
+      alert('Erro ao carregar grupos da conta: ' + err.message);
+    }
+  }
+
+  onAuthStateChanged(auth, async (user) => {
+    usuarioAtual = user;
+    if (user) {
+      btnAbrirAuth.classList.add('hidden');
+      userLoggedBox.classList.remove('hidden');
+      userDisplayEmail.textContent = user.displayName || user.email;
+
+      if (user.photoURL) {
+        userAvatar.src = user.photoURL;
+        userAvatar.classList.remove('hidden');
+      } else {
+        userAvatar.classList.add('hidden');
+      }
+
+      await carregarGruposDaConta(user);
+    } else {
+      btnAbrirAuth.classList.remove('hidden');
+      userLoggedBox.classList.add('hidden');
+    }
+  });
 
   // Inicialização, idioma e conexão com Firebase
   resetarDataGasto();
