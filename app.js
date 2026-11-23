@@ -5,6 +5,17 @@ import {
   persistentMultipleTabManager,
   doc,
   getDoc,
+  getDocFromServer,
+  setDoc,
+  deleteDoc,
+  onSnapshot
+} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  doc,
+  getDoc,
   setDoc,
   deleteDoc,
   onSnapshot
@@ -2564,13 +2575,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  async function sincronizarListaGruposUsuario() {
+async function sincronizarListaGruposUsuario() {
     if (!usuarioAtual) return;
     try {
       const userRef = doc(db, 'usuarios', usuarioAtual.uid);
       const gruposIds = appData.grupos
         .filter((g) => g.nome !== 'Carregando grupo...')
         .map((g) => g.id);
+
+      // Nunca sobrescreve a nuvem se só houver o grupo padrão vazio recém-criado
+      const ehApenasGrupoPadraoVazio =
+        appData.grupos.length === 1 &&
+        appData.grupos[0].nome === 'Geral / Viagem' &&
+        appData.grupos[0].pessoas.length === 0 &&
+        appData.grupos[0].gastos.length === 0;
+
+      if (ehApenasGrupoPadraoVazio) return;
 
       await setDoc(
         userRef,
@@ -2587,20 +2607,20 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error('Erro ao salvar lista de grupos do usuário:', err);
     }
   }
-
-  async function carregarGruposDaConta(user) {
-    // 1. Primeiro carrega o cache offline exclusivo deste UID (se existir) para abrir instantâneo
+ async function carregarGruposDaConta(user) {
+    // 1. Mostra cache local do UID imediatamente enquanto consulta o servidor
     const cacheConta = carregarCacheLocalUsuario(user.uid);
     if (cacheConta) {
       appData = cacheConta;
       renderizarTudo();
-      conectarTodosGruposNuvem();
     }
 
-    // 2. Depois sincroniza com a lista oficial da conta no Firestore
     try {
       const userRef = doc(db, 'usuarios', user.uid);
-      const snap = await getDoc(userRef);
+      // Busca direto do servidor se estiver online, evitando cache desatualizado do PC
+      const snap = navigator.onLine
+        ? await getDocFromServer(userRef)
+        : await getDoc(userRef);
 
       let idsNuvem = [];
       let ultimoAtivoNuvem = null;
@@ -2615,6 +2635,7 @@ document.addEventListener('DOMContentLoaded', () => {
         idsNuvem.push(grupoUrlId);
       }
 
+      // Desconecta listeners antigos que não pertencem a esta conta
       Object.keys(unsubscribersNuvem).forEach((id) => {
         if (!idsNuvem.includes(id)) {
           unsubscribersNuvem[id]();
@@ -2649,13 +2670,18 @@ document.addEventListener('DOMContentLoaded', () => {
       salvarCacheLocal();
       renderizarTudo();
       conectarTodosGruposNuvem();
-      await sincronizarListaGruposUsuario();
+
+      // Só atualiza a lista na nuvem se entrou via link de convite (?grupo=...)
+      if (grupoUrlId) {
+        await sincronizarListaGruposUsuario();
+      }
     } catch (err) {
-      console.warn('Sem rede ao buscar lista da conta, usando cache offline do usuário:', err);
+      console.warn('Falha ao consultar servidor, mantendo cache offline:', err);
       if (!cacheConta) {
         appData = criarEstadoInicial();
         renderizarTudo();
       }
+      conectarTodosGruposNuvem();
     }
   }
 
