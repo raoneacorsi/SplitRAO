@@ -219,7 +219,13 @@ body {
 /* Formulários */
 .input-group-inline {
   display: flex;
-  gap: 10px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.input-group-inline input[type="text"] {
+  flex: 1;
+  min-width: 170px;
 }
 
 .form-group {
@@ -595,6 +601,20 @@ button {
   background-color: #bae6fd;
 }
 
+.btn-eu-sm {
+  padding: 10px 12px;
+  background-color: #f0fdf4;
+  color: var(--success-text);
+  border: 1.5px solid #86efac;
+  white-space: nowrap;
+  font-size: 0.86rem;
+}
+
+.btn-eu-sm:hover {
+  background-color: var(--success-bg);
+  border-color: var(--success);
+}
+
 .btn-text {
   background: none;
   color: var(--primary);
@@ -638,6 +658,22 @@ button {
   gap: 8px;
 }
 
+.tag.tag-is-me {
+  background-color: var(--success-bg);
+  color: var(--success-text);
+  border-color: #86efac;
+  font-weight: 600;
+}
+
+.tag-eu-badge {
+  background: rgba(21, 128, 61, 0.14);
+  color: var(--success-text);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+
 .tag-remove {
   background: rgba(3, 105, 161, 0.12);
   color: #0369a1;
@@ -649,9 +685,59 @@ button {
   padding: 0;
 }
 
+.tag.tag-is-me .tag-remove {
+  background: rgba(21, 128, 61, 0.15);
+  color: var(--success-text);
+}
+
 .tag-remove:hover {
   background: var(--danger-text);
   color: white;
+}
+
+/* Destaque do Meu Saldo ao Logar */
+.meu-saldo-box {
+  margin-top: 14px;
+  background: #ffffff;
+  border: 1.5px solid #7dd3fc;
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
+
+.meu-saldo-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.meu-saldo-titulo {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #0c4a6e;
+}
+
+.meu-saldo-total {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.meu-saldo-detalhes {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.84rem;
+}
+
+.meu-saldo-linha {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
 }
 
 /* Saldos e Acertos */
@@ -667,6 +753,11 @@ button {
   border-radius: var(--radius-md);
   padding: 12px;
   text-align: center;
+}
+
+.saldo-card.saldo-card-me {
+  border-color: #86efac;
+  background: #f0fdf4;
 }
 
 .saldo-nome {
@@ -1472,4 +1563,18 @@ button {
   height: 16px;
   accent-color: var(--primary);
   cursor: pointer;
+}
+/* Barra superior: usuário + bandeirinhas lado a lado */
+.top-utility-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.top-utility-bar .auth-bar,
+.top-utility-bar .lang-switcher {
+  margin-bottom: 0;
 }
