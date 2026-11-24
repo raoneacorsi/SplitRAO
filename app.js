@@ -184,18 +184,15 @@ function getMeParticipantName(grupo) {
     ? grupo.meusParticipantes
     : {};
 
-  // 1. Vínculo explícito do UID atual no documento do grupo
   if (uid && mapaGrupo[uid] && grupo.pessoas.includes(mapaGrupo[uid])) {
     return mapaGrupo[uid];
   }
 
-  // 2. Cache local específico do UID atual
   const cacheUid = lerCacheMeDoUsuario(uid);
   if (grupo.id && cacheUid[grupo.id] && grupo.pessoas.includes(cacheUid[grupo.id])) {
     return cacheUid[grupo.id];
   }
 
-  // 3. Correspondência automática pelo nome do usuário logado
   const meuNome = getNomeUsuarioEfetivo();
   if (meuNome) {
     const alvo = normalizarTexto(meuNome);
@@ -203,7 +200,6 @@ function getMeParticipantName(grupo) {
     if (match) return match;
   }
 
-  // 4. Fallback legado somente se não houver usuário autenticado
   if (!uid && grupo.meuParticipante && grupo.pessoas.includes(grupo.meuParticipante)) {
     return grupo.meuParticipante;
   }
@@ -348,6 +344,20 @@ function gerarId(prefixo) {
   return `${prefixo}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 }
 
+function ordenarLancamentosPorData(lista) {
+  return (Array.isArray(lista) ? lista : [])
+    .map((item, idx) => ({ item, idx }))
+    .sort((a, b) => {
+      const da = a.item?.data || '';
+      const db = b.item?.data || '';
+      if (da !== db) {
+        return db.localeCompare(da);
+      }
+      return b.idx - a.idx;
+    })
+    .map(entry => entry.item);
+}
+
 function setSaveStatus(statusKey, extraVars = {}) {
   const el = document.getElementById('save-status');
   if (!el) return;
@@ -384,7 +394,6 @@ function normalizarEstruturaGrupo(id, raw) {
     ? { ...g.meusParticipantes }
     : {};
 
-  // Limpa vínculos de participantes que já foram removidos do grupo
   for (const [uidKey, boundName] of Object.entries(meusParticipantes)) {
     if (!pessoas.includes(boundName)) {
       delete meusParticipantes[uidKey];
@@ -502,7 +511,6 @@ async function garantirPerfilUsuarioNaNuvem(user) {
     salvarNomeUsuarioLocal(nomeNuvem, user.uid);
   }
 
-  // Sincroniza cache local de "Eu" por grupo a partir do perfil do usuário na nuvem
   const cacheAtual = lerCacheMeDoUsuario(user.uid);
   const meNuvem = data.meByGroup && typeof data.meByGroup === 'object' ? data.meByGroup : {};
   const cacheMesclado = { ...cacheAtual, ...meNuvem };
@@ -2135,13 +2143,13 @@ function renderHistorico() {
   if (!ul) return;
   ul.innerHTML = '';
 
-  const filtrados = getLancamentosFiltrados(grupo);
+  const filtrados = ordenarLancamentosPorData(getLancamentosFiltrados(grupo));
   if (filtrados.length === 0) {
     ul.innerHTML = `<li class="empty-state-text">${escapeHTML(t('noEntriesFilter'))}</li>`;
     return;
   }
 
-  [...filtrados].reverse().forEach(g => {
+  filtrados.forEach(g => {
     const li = document.createElement('li');
     const valBRL = getValorEmBRL(g);
     const moeda = g.moeda || 'BRL';
@@ -2346,8 +2354,8 @@ let ultimoTextoWhatsApp = '';
 function abrirRelatorio() {
   const grupo = getGrupoAtivo();
   const { stats, transferencias } = calcularBalancoGrupo(grupo);
-  const despesas = (grupo.gastos || []).filter(g => g.tipo !== 'pagamento');
-  const pagamentos = (grupo.gastos || []).filter(g => g.tipo === 'pagamento');
+  const despesas = ordenarLancamentosPorData((grupo.gastos || []).filter(g => g.tipo !== 'pagamento'));
+  const pagamentos = ordenarLancamentosPorData((grupo.gastos || []).filter(g => g.tipo === 'pagamento'));
   const totalDespesas = despesas.reduce((acc, g) => acc + getValorEmBRL(g), 0);
 
   document.getElementById('relatorio-titulo').textContent = `${t('reportTitlePrefix')} • ${grupo.nome}`;
@@ -2382,7 +2390,7 @@ function abrirRelatorio() {
 
   const expRows = despesas.length === 0
     ? `<tr><td colspan="4">${escapeHTML(t('noExpensesRecorded'))}</td></tr>`
-    : [...despesas].reverse().map(g => `
+    : despesas.map(g => `
       <tr>
         <td>${escapeHTML(g.data ? formatDateBR(g.data) : '-')}</td>
         <td>${escapeHTML(g.descricao)}</td>
