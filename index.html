@@ -12,10 +12,9 @@
 <body>
   <main class="app-wrapper hidden" id="main-app">
     <div class="app-container">
-      
-      <!-- Cabeçalho -->
+
+      <!-- Cabeçalho (Logo + Nome do App no topo preservados) -->
       <header class="app-header">
-        <!-- Barra Superior: Conta / Login + Bandeirinhas à direita -->
         <div class="top-utility-bar">
           <div class="auth-bar" id="auth-bar">
             <div id="user-logged-box" class="user-pill hidden">
@@ -25,7 +24,6 @@
             </div>
           </div>
 
-          <!-- Seletor de Idiomas com Bandeiras SVG -->
           <div class="lang-switcher" id="lang-switcher">
             <button type="button" class="lang-btn active" data-lang="pt" title="Português (Brasil)">
               <svg class="flag-icon" viewBox="0 0 28 20" width="20" height="14" aria-hidden="true">
@@ -81,212 +79,104 @@
         <p data-i18n="appSubtitle">Divisão inteligente de despesas em tempo real</p>
       </header>
 
-      <!-- Cartão Unificado: Grupo Atual + Participantes -->
+      <!-- Cartão Principal do Grupo em Destaque + Menu de 3 Tracinhos -->
       <section class="card group-bar-card">
-        <div class="group-selector-row">
-          <div class="group-select-wrapper">
-            <label for="select-grupo" data-i18n="currentGroup">Grupo Atual</label>
-            <select id="select-grupo"></select>
+        <div class="group-hero-row">
+          <div class="group-hero-title-wrap">
+            <div class="group-title-line">
+              <span class="save-status" id="save-status" title="Conectando à nuvem...">🟡</span>
+              <h2 id="grupo-destaque-nome" class="group-hero-name">Grupo Principal</h2>
+              <button type="button" id="btn-renomear-grupo" class="btn-icon-ghost" data-i18n-title="renameGroupTitle" title="Renomear grupo atual">✎</button>
+            </div>
+            <div class="group-switch-inline">
+              <select id="select-grupo" class="select-group-compact" aria-label="Selecionar grupo"></select>
+              <button type="button" id="btn-novo-grupo" class="btn-secondary-sm" data-i18n="newGroupBtn">+ Grupo</button>
+            </div>
           </div>
-          <div class="group-actions">
-            <button type="button" id="btn-renomear-grupo" class="btn-secondary" data-i18n-title="renameGroupTitle" title="Renomear grupo atual">✎</button>
-            <button type="button" id="btn-novo-grupo" class="btn-secondary" data-i18n="newGroupBtn">+ Grupo</button>
-            <button type="button" id="btn-excluir-grupo" class="btn-danger-ghost" data-i18n="leaveDeleteBtn">Sair/Excluir</button>
+
+          <!-- Menu de 3 tracinhos ao lado -->
+          <div class="menu-3dots-wrap" id="menu-3dots-wrap">
+            <button type="button" id="btn-menu-3dots" class="btn-3dots" aria-expanded="false" aria-label="Menu de opções" title="Opções">
+              <span></span>
+              <span></span>
+              <span></span>
+            </button>
+
+            <div id="dropdown-3dots" class="dropdown-3dots hidden">
+              <button type="button" id="menu-copiar-codigo" class="dropdown-item">
+                <span>📋</span>
+                <span id="menu-codigo-label">Copiar código (<code id="menu-codigo-valor">---</code>)</span>
+              </button>
+              <button type="button" id="btn-entrar-codigo" class="dropdown-item">
+                <span>🔑</span>
+                <span data-i18n="codeBtn">Código</span>
+              </button>
+              <button type="button" id="btn-balanco-global" class="dropdown-item">
+                <span>🌐</span>
+                <span data-i18n="globalBalanceBtn">Balanço Global</span>
+              </button>
+              <button type="button" id="btn-exportar-json" class="dropdown-item">
+                <span>💾</span>
+                <span data-i18n="backupBtn">Backup</span>
+              </button>
+              <label for="input-importar-json" class="dropdown-item">
+                <span>📂</span>
+                <span data-i18n="importBtn">Importar</span>
+              </label>
+              <input type="file" id="input-importar-json" accept=".json" hidden>
+              <div class="dropdown-divider"></div>
+              <button type="button" id="btn-excluir-grupo" class="dropdown-item danger">
+                <span>🚪</span>
+                <span data-i18n="leaveDeleteBtn">Sair/Excluir</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        <!-- Barra de Compartilhamento -->
-        <div class="backup-bar" style="border-top: 1px solid #e0f2fe; padding-top: 10px; margin-top: 12px; flex-wrap: wrap; gap: 6px;">
-          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <span class="save-status" id="save-status" title="Conectando à nuvem..." style="cursor: help; font-size: 0.9rem; line-height: 1;">🟡</span>
-            <span id="badge-codigo-grupo" data-i18n-title="copyCodeTitle" title="Clique para copiar o código do grupo" style="cursor: pointer; background: #f1f5f9; border: 1px solid #cbd5e1; color: #334155; font-family: monospace; font-size: 0.78rem; padding: 2px 8px; border-radius: 6px;">
-              ID: ---
-            </span>
+        <!-- Participantes: Enviar Link vs Adicionar Pessoa sem App -->
+        <div class="participants-block">
+          <div class="participants-header">
+            <h3 data-i18n="sec1Title">Participantes do Grupo</h3>
+            <div class="invite-actions-inline">
+              <button type="button" id="btn-compartilhar-grupo" class="btn-invite-link" data-i18n="inviteLinkBtn">🔗 Enviar Link</button>
+              <button type="button" id="btn-add-eu" class="btn-eu-sm" data-i18n-title="addMeBtnTitle" title="Adicionar ou selecionar você no grupo">👤 Eu</button>
+            </div>
           </div>
-          <div class="backup-buttons">
-            <button type="button" id="btn-compartilhar-grupo" class="btn-outline-sm" style="background: #dcfce7; border-color: #86efac; color: #15803d;" data-i18n="inviteLinkBtn">🔗 Convidar / Link</button>
-            <button type="button" id="btn-entrar-codigo" class="btn-outline-sm" data-i18n="codeBtn">🔑 Código</button>
-          </div>
-        </div>
 
-        <!-- Barra de Backup e Balanço Global -->
-        <div class="backup-bar" style="margin-top: 10px; padding-top: 10px;">
-          <button type="button" id="btn-balanco-global" class="btn-outline-sm" style="border-color: #0284c7; color: #0369a1; background: #e0f2fe;" data-i18n="globalBalanceBtn">🌐 Balanço Global</button>
-          <div class="backup-buttons">
-            <button type="button" id="btn-exportar-json" class="btn-outline-sm" data-i18n="backupBtn">💾 Backup</button>
-            <label for="input-importar-json" class="btn-outline-sm file-label" data-i18n="importBtn">📂 Importar</label>
-            <input type="file" id="input-importar-json" accept=".json" hidden>
-          </div>
-        </div>
-
-        <!-- Participantes integrados ao cartão do grupo -->
-        <div style="border-top: 1px solid #e0f2fe; margin-top: 14px; padding-top: 14px;">
-          <div class="card-title">
-            <span class="step-badge">1</span>
-            <h2 data-i18n="sec1Title">Participantes do Grupo</h2>
-          </div>
-          
           <form id="form-pessoa" class="input-group-inline">
-            <input type="text" id="nome-pessoa" data-i18n-placeholder="personPlaceholder" placeholder="Digite o nome (ex: Rodrigo, Jessica)..." autocomplete="off">
-            <button type="button" id="btn-add-eu" class="btn-eu-sm" data-i18n-title="addMeBtnTitle" title="Adicionar ou selecionar você no grupo">👤 Eu</button>
-            <button type="submit" class="btn-secondary" data-i18n="addPersonBtn">+ Adicionar</button>
+            <input type="text" id="nome-pessoa" data-i18n-placeholder="personPlaceholder" placeholder="Nome de quem não usa o app..." autocomplete="off">
+            <button type="submit" class="btn-secondary" data-i18n="addVirtualPersonBtn">+ Sem app</button>
           </form>
 
           <div id="lista-pessoas" class="tags-container"></div>
         </div>
       </section>
 
-      <!-- Seção 2: Novo Gasto / Edição (Recolhível) -->
-      <section class="card" id="card-form-gasto">
-        <button type="button" id="btn-abrir-form-gasto" class="btn-expand-section btn-expand-primary">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          <span data-i18n="addExpenseExpandBtn">Incluir Novo Gasto</span>
-        </button>
-
-        <div id="container-form-gasto" class="hidden">
-          <div class="card-header-between" style="margin-bottom: 16px;">
-            <div class="card-title" style="margin-bottom: 0;">
-              <span class="step-badge">2</span>
-              <h2 id="titulo-form-gasto" data-i18n="sec2TitleNew">Registrar Novo Gasto</h2>
-            </div>
-            <div style="display: flex; gap: 6px; align-items: center;">
-              <button type="button" id="btn-cancelar-edicao" class="btn-danger-ghost hidden" data-i18n="cancelEditBtn">Cancelar Edição</button>
-              <button type="button" id="btn-fechar-form-gasto" class="btn-outline-sm" data-i18n="collapseFormBtn">▲ Fechar</button>
-            </div>
-          </div>
-
-          <form id="form-gasto">
-            <input type="hidden" id="edit-gasto-id" value="">
-
-            <div class="form-group">
-              <div class="label-row">
-                <label for="desc-gasto" data-i18n="whatPaidLabel">O que foi pago?</label>
-                <div style="position: relative;">
-                  <button type="button" id="btn-data-gasto" class="btn-date-picker">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                    <span id="label-data-gasto">Hoje</span>
-                  </button>
-                  <input type="date" id="input-data-gasto" class="hidden-date-input">
-                </div>
-              </div>
-              <input type="text" id="desc-gasto" data-i18n-placeholder="descPlaceholder" placeholder="Ex: Supermercado, Combustível, Jantar..." required>
-            </div>
-
-            <!-- Seletor Opcional de Categoria (com detecção automática) -->
-            <div class="form-group">
-              <div class="label-row">
-                <label>
-                  <span data-i18n="categoryLabel">Categoria</span>
-                  <span class="label-optional" data-i18n="optionalTag">(opcional)</span>
-                  <span id="auto-cat-badge" class="auto-cat-badge hidden" data-i18n="autoDetectedTag">✨ Auto</span>
-                </label>
-                <button type="button" id="btn-limpar-categoria" class="btn-text hidden" data-i18n="clearSelectionBtn">Limpar seleção</button>
-              </div>
-              <div id="category-selector" class="category-grid"></div>
-            </div>
-
-            <div class="form-grid-2">
-              <div class="form-group">
-                <label for="valor-gasto" data-i18n="totalAmountLabel">Valor Total</label>
-                <div class="currency-input-group">
-                  <select id="moeda-gasto" class="currency-select" aria-label="Moeda">
-                    <option value="BRL">BRL (R$)</option>
-                    <option value="USD">USD ($)</option>
-                    <option value="CLP">CLP ($)</option>
-                    <option value="ARS">ARS ($)</option>
-                    <option value="EUR">EUR (€)</option>
-                    <option value="BOB">BOB (Bs)</option>
-                    <option value="PEN">PEN (S/)</option>
-                  </select>
-                  <input type="number" id="valor-gasto" step="0.01" min="0.01" placeholder="0,00" required>
-                </div>
-              </div>
-
-              <div class="form-group">
-                <label for="pagador-gasto" data-i18n="whoPaidLabel">Quem pagou?</label>
-                <select id="pagador-gasto" required>
-                  <option value="">Adicione alguém acima</option>
-                </select>
-              </div>
-            </div>
-
-            <!-- Painel de Câmbio (aparece quando moeda != BRL) -->
-            <div id="box-cambio" class="exchange-box hidden">
-              <div class="exchange-header">
-                <span class="exchange-title" id="exchange-rate-label">💱 Câmbio (1 USD = R$)</span>
-                <button type="button" id="btn-buscar-cotacao" class="btn-text" data-i18n="fetchRateBtn">🔄 Atualizar cotação</button>
-              </div>
-              <div class="exchange-row">
-                <div class="exchange-input-wrap">
-                  <span>1 <strong id="exchange-curr-code">USD</strong> = R$</span>
-                  <input type="number" id="taxa-cambio" step="0.000001" min="0.000001" placeholder="0,0000">
-                </div>
-                <div class="exchange-converted">
-                  <small data-i18n="convertedToBrlLabel">Equivalente no grupo:</small>
-                  <strong id="valor-convertido-brl">R$ 0,00</strong>
-                </div>
-              </div>
-              <small id="cambio-status-msg" class="exchange-status"></small>
-            </div>
-
-            <!-- Modo de Divisão -->
-            <div class="form-group">
-              <div class="label-row">
-                <label data-i18n="splitModeLabel">Modo de divisão:</label>
-                <button type="button" id="btn-todos" class="btn-text" data-i18n="toggleAllBtn">Alternar todos</button>
-              </div>
-
-              <div class="split-mode-tabs" id="split-mode-tabs">
-                <button type="button" class="mode-tab active" data-mode="igual" data-i18n="modeEqual">⚖️ Igual</button>
-                <button type="button" class="mode-tab" data-mode="exato" data-i18n="modeExact">💲 Valor Exato</button>
-                <button type="button" class="mode-tab" data-mode="cotas" data-i18n="modeShares">📊 Por Cotas</button>
-              </div>
-
-              <div id="area-divisao-dinamica" class="people-selector-box"></div>
-
-              <div id="split-feedback" class="split-feedback hidden"></div>
-            </div>
-
-            <button type="submit" id="btn-submit-gasto" class="btn-primary" data-i18n="saveExpenseBtn">Salvar Despesa</button>
-          </form>
-        </div>
-      </section>
-
-      <!-- Seção 3: Acerto de Contas -->
+      <!-- Saldos em Destaque (Logo após participantes para leitura rápida de quem deve e quem recebe) -->
       <section class="card highlight-card">
-        <div class="card-header-between" style="flex-wrap: wrap; gap: 8px;">
-          <div class="card-title" style="margin-bottom: 0;">
-            <span class="step-badge">3</span>
-            <h2 data-i18n="sec3Title">Resumo e Acerto</h2>
-          </div>
-          <div style="display: flex; gap: 8px;">
+        <div class="card-header-between">
+          <h2 data-i18n="sec3Title">Resumo e Acerto</h2>
+          <div class="header-btns-row">
             <button type="button" id="btn-abrir-quitar" class="btn-success-sm" data-i18n="settleBtn">💸 Quitar Conta</button>
             <button type="button" id="btn-relatorio" class="btn-primary-sm" data-i18n="reportBtn">📄 Relatório</button>
           </div>
         </div>
 
-        <!-- Destaque imediato do saldo do usuário logado ("Eu") -->
         <div id="meu-saldo-box" class="meu-saldo-box hidden"></div>
 
-        <div id="resumo-saldos" class="saldos-grid" style="margin-top: 16px;"></div>
-        
+        <div id="resumo-saldos" class="saldos-grid"></div>
+
         <div class="divider"></div>
-        
-        <h3 class="sub-heading" data-i18n="whoPaysWhomHeading">Quem paga quem (Saldo pendente):</h3>
+
         <ul id="lista-acertos" class="acertos-list"></ul>
       </section>
 
-      <!-- Seção 4: Histórico (Recolhível) -->
+      <!-- Histórico (Botão direto "Ver histórico" que expande ao clicar) -->
       <section class="card">
-        <div class="card-header-between" style="flex-wrap: wrap; gap: 8px;">
-          <div class="card-title" style="margin-bottom: 0;">
-            <span class="step-badge">4</span>
-            <h2 data-i18n="sec4Title">Histórico do Grupo</h2>
-          </div>
-          <span id="total-grupo-badge" class="total-badge">Total Gasto: R$ 0,00</span>
+        <div class="card-header-between">
+          <button type="button" id="btn-toggle-historico" class="btn-expand-section" data-i18n="viewHistorySimpleBtn">Ver histórico</button>
+          <span id="total-grupo-badge" class="total-badge">R$ 0,00</span>
         </div>
-
-        <button type="button" id="btn-toggle-historico" class="btn-expand-section" style="margin-top: 14px;"></button>
 
         <div id="container-historico" class="hidden" style="margin-top: 14px;">
           <div class="filter-bar">
@@ -308,6 +198,123 @@
       </section>
 
     </div>
+
+    <!-- Botão Flutuante Novo Gasto -->
+    <button type="button" id="btn-fab-novo-gasto" class="fab-novo-gasto" aria-label="Novo Gasto">
+      <span class="fab-plus">+</span>
+      <span class="fab-label">Novo Gasto</span>
+    </button>
+
+    <!-- Janela / Modal de Novo Gasto / Edição -->
+    <div id="modal-form-gasto" class="modal-gasto-overlay hidden">
+      <div class="modal-gasto-box">
+        <section class="card" id="card-form-gasto">
+          
+
+          <div id="container-form-gasto" class="hidden">
+            <div class="card-header-between" style="margin-bottom: 16px;">
+              <h2 id="titulo-form-gasto" data-i18n="sec2TitleNew">Registrar Novo Gasto</h2>
+              <div style="display: flex; gap: 6px; align-items: center;">
+                <button type="button" id="btn-cancelar-edicao" class="btn-danger-ghost hidden" data-i18n="cancelEditBtn">Cancelar Edição</button>
+                <button type="button" id="btn-fechar-form-gasto" class="btn-outline-sm" data-i18n="collapseFormBtn">▲ Fechar</button>
+              </div>
+            </div>
+
+            <form id="form-gasto">
+              <input type="hidden" id="edit-gasto-id" value="">
+
+              <div class="form-group">
+                <div class="label-row">
+                  <label for="desc-gasto" data-i18n="whatPaidLabel">O que foi pago?</label>
+                  <div style="position: relative;">
+                    <button type="button" id="btn-data-gasto" class="btn-date-picker">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                      <span id="label-data-gasto">Hoje</span>
+                    </button>
+                    <input type="date" id="input-data-gasto" class="hidden-date-input">
+                  </div>
+                </div>
+                <input type="text" id="desc-gasto" data-i18n-placeholder="descPlaceholder" placeholder="Ex: Supermercado, Combustível, Jantar..." required>
+              </div>
+
+              <div class="form-group">
+                <div class="label-row">
+                  <label>
+                    <span data-i18n="categoryLabel">Categoria</span>
+                    <span class="label-optional" data-i18n="optionalTag">(opcional)</span>
+                    <span id="auto-cat-badge" class="auto-cat-badge hidden" data-i18n="autoDetectedTag">✨ Auto</span>
+                  </label>
+                  <button type="button" id="btn-limpar-categoria" class="btn-text hidden" data-i18n="clearSelectionBtn">Limpar seleção</button>
+                </div>
+                <div id="category-selector" class="category-grid"></div>
+              </div>
+
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label for="valor-gasto" data-i18n="totalAmountLabel">Valor Total</label>
+                  <div class="currency-input-group">
+                    <select id="moeda-gasto" class="currency-select" aria-label="Moeda">
+                      <option value="BRL">BRL (R$)</option>
+                      <option value="USD">USD ($)</option>
+                      <option value="CLP">CLP ($)</option>
+                      <option value="ARS">ARS ($)</option>
+                      <option value="EUR">EUR (€)</option>
+                      <option value="BOB">BOB (Bs)</option>
+                      <option value="PEN">PEN (S/)</option>
+                    </select>
+                    <input type="number" id="valor-gasto" step="0.01" min="0.01" placeholder="0,00" required>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="pagador-gasto" data-i18n="whoPaidLabel">Quem pagou?</label>
+                  <select id="pagador-gasto" required>
+                    <option value="">Adicione alguém acima</option>
+                  </select>
+                </div>
+              </div>
+
+              <div id="box-cambio" class="exchange-box hidden">
+                <div class="exchange-header">
+                  <span class="exchange-title" id="exchange-rate-label">💱 Câmbio (1 USD = R$)</span>
+                  <button type="button" id="btn-buscar-cotacao" class="btn-text" data-i18n="fetchRateBtn">🔄 Atualizar cotação</button>
+                </div>
+                <div class="exchange-row">
+                  <div class="exchange-input-wrap">
+                    <span>1 <strong id="exchange-curr-code">USD</strong> = R$</span>
+                    <input type="number" id="taxa-cambio" step="0.000001" min="0.000001" placeholder="0,0000">
+                  </div>
+                  <div class="exchange-converted">
+                    <small data-i18n="convertedToBrlLabel">Equivalente no grupo:</small>
+                    <strong id="valor-convertido-brl">R$ 0,00</strong>
+                  </div>
+                </div>
+                <small id="cambio-status-msg" class="exchange-status"></small>
+              </div>
+
+              <div class="form-group">
+                <div class="label-row">
+                  <label data-i18n="splitModeLabel">Modo de divisão:</label>
+                  <button type="button" id="btn-todos" class="btn-text" data-i18n="toggleAllBtn">Alternar todos</button>
+                </div>
+
+                <div class="split-mode-tabs" id="split-mode-tabs">
+                  <button type="button" class="mode-tab active" data-mode="igual" data-i18n="modeEqual">⚖️ Igual</button>
+                  <button type="button" class="mode-tab" data-mode="exato" data-i18n="modeExact">💲 Valor Exato</button>
+                  <button type="button" class="mode-tab" data-mode="cotas" data-i18n="modeShares">📊 Por Cotas</button>
+                </div>
+
+                <div id="area-divisao-dinamica" class="people-selector-box"></div>
+
+                <div id="split-feedback" class="split-feedback hidden"></div>
+              </div>
+
+              <button type="submit" id="btn-submit-gasto" class="btn-primary" data-i18n="saveExpenseBtn">Salvar Despesa</button>
+            </form>
+          </div>
+        </section>
+      </div>
+    </div>
   </main>
 
   <!-- Modal Balanço Global (Todos os Grupos) -->
@@ -317,7 +324,7 @@
         <h2 data-i18n="globalModalTitle">🌐 Balanço Global (Todos os Grupos)</h2>
         <button type="button" id="btn-fechar-global" class="btn-close">×</button>
       </div>
-      
+
       <div id="global-conteudo" class="modal-body"></div>
 
       <div class="modal-footer">
@@ -334,7 +341,7 @@
         <h2 data-i18n="settleModalTitle">💸 Registrar Pagamento / Quitação</h2>
         <button type="button" id="btn-fechar-quitar" class="btn-close">×</button>
       </div>
-      
+
       <form id="form-quitar" class="modal-body">
         <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;" data-i18n="settleModalDesc">
           Registre uma transferência feita entre participantes para abater total ou parcialmente uma dívida.
@@ -375,7 +382,7 @@
         <h2 id="relatorio-titulo">Relatório de Despesas</h2>
         <button type="button" id="btn-fechar-modal" class="btn-close">×</button>
       </div>
-      
+
       <div id="relatorio-conteudo" class="modal-body"></div>
 
       <div class="modal-footer">
@@ -486,6 +493,6 @@
     </div>
   </div>
 
-  <script type="module" src="app.js?v=7"></script>
+  <script type="module" src="app.js?v=8"></script>
 </body>
 </html>

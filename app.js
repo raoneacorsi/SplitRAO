@@ -99,7 +99,13 @@ const { t, getNomeCategoriaTraduzido } = createTranslator(() => currentLang);
 
 let currentUser = null;
 let currentUserName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
-let meByGroupCache = {};
+let meByGroupCache = (() => {
+  try {
+    return JSON.parse(localStorage.getItem(ME_BY_GROUP_STORAGE_KEY) || '{}') || {};
+  } catch {
+    return {};
+  }
+})();
 
 let authMode = 'login';
 let unsubscribeGroupDoc = null;
@@ -119,50 +125,18 @@ let filtroCategoriaAtual = 'todas';
 let totaisAberto = false;
 let historicoAberto = false;
 let formGastoAberto = false;
+let menu3DotsAberto = false;
 let dataGastoSelecionada = '';
 
 // ==================== UTILITÁRIOS DE IDENTIDADE ("EU") ====================
-function getMeStorageKey(uid) {
-  return `${ME_BY_GROUP_STORAGE_KEY}_${uid || 'anon'}`;
-}
-
-function getUserNameStorageKey(uid) {
-  return `${USER_NAME_STORAGE_KEY}_${uid || 'anon'}`;
-}
-
-function lerCacheMeDoUsuario(uid) {
-  try {
-    return JSON.parse(localStorage.getItem(getMeStorageKey(uid)) || '{}') || {};
-  } catch {
-    return {};
-  }
-}
-
-function salvarCacheMeDoUsuario(uid, mapa) {
-  try {
-    localStorage.setItem(getMeStorageKey(uid), JSON.stringify(mapa || {}));
-  } catch {}
-}
-
-function salvarNomeUsuarioLocal(nome, uid = currentUser?.uid) {
+function salvarNomeUsuarioLocal(nome) {
   const limpo = String(nome || '').trim();
   currentUserName = limpo;
   if (limpo) {
-    localStorage.setItem(getUserNameStorageKey(uid), limpo);
-    if (!uid) {
-      localStorage.setItem(USER_NAME_STORAGE_KEY, limpo);
-    }
+    localStorage.setItem(USER_NAME_STORAGE_KEY, limpo);
   } else {
-    localStorage.removeItem(getUserNameStorageKey(uid));
-    if (!uid) {
-      localStorage.removeItem(USER_NAME_STORAGE_KEY);
-    }
+    localStorage.removeItem(USER_NAME_STORAGE_KEY);
   }
-}
-
-function carregarNomeUsuarioLocal(uid) {
-  if (!uid) return localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
-  return localStorage.getItem(getUserNameStorageKey(uid)) || '';
 }
 
 function getNomeUsuarioEfetivo() {
@@ -179,18 +153,13 @@ function getNomeUsuarioEfetivo() {
 function getMeParticipantName(grupo) {
   if (!grupo || !Array.isArray(grupo.pessoas) || grupo.pessoas.length === 0) return null;
 
-  const uid = currentUser?.uid || null;
-  const mapaGrupo = grupo.meusParticipantes && typeof grupo.meusParticipantes === 'object'
-    ? grupo.meusParticipantes
-    : {};
-
-  if (uid && mapaGrupo[uid] && grupo.pessoas.includes(mapaGrupo[uid])) {
-    return mapaGrupo[uid];
+  if (grupo.meuParticipante && grupo.pessoas.includes(grupo.meuParticipante)) {
+    return grupo.meuParticipante;
   }
 
-  const cacheUid = lerCacheMeDoUsuario(uid);
-  if (grupo.id && cacheUid[grupo.id] && grupo.pessoas.includes(cacheUid[grupo.id])) {
-    return cacheUid[grupo.id];
+  const cachedMe = meByGroupCache[grupo.id];
+  if (cachedMe && grupo.pessoas.includes(cachedMe)) {
+    return cachedMe;
   }
 
   const meuNome = getNomeUsuarioEfetivo();
@@ -200,68 +169,24 @@ function getMeParticipantName(grupo) {
     if (match) return match;
   }
 
-  if (!uid && grupo.meuParticipante && grupo.pessoas.includes(grupo.meuParticipante)) {
-    return grupo.meuParticipante;
-  }
-
   return null;
 }
 
-async function setMeParticipantName(grupo, pessoaNome) {
+function setMeParticipantName(grupo, pessoaNome) {
   if (!grupo || !pessoaNome) return;
-
-  grupo.meusParticipantes = grupo.meusParticipantes && typeof grupo.meusParticipantes === 'object'
-    ? { ...grupo.meusParticipantes }
-    : {};
-
-  const uid = currentUser?.uid || null;
-  if (uid) {
-    grupo.meusParticipantes[uid] = pessoaNome;
-  } else {
-    grupo.meuParticipante = pessoaNome;
-  }
-
+  grupo.meuParticipante = pessoaNome;
   if (grupo.id) {
-    const cacheUid = lerCacheMeDoUsuario(uid);
-    cacheUid[grupo.id] = pessoaNome;
-    meByGroupCache = cacheUid;
-    salvarCacheMeDoUsuario(uid, cacheUid);
-  }
-
-  salvarEstadoLocal();
-
-  if (currentUser && grupo.id) {
-    isSavingCloud = true;
-    setSaveStatus('statusSaving');
+    meByGroupCache[grupo.id] = pessoaNome;
     try {
-      await setDoc(getGroupDocRef(grupo.id), {
-        [`meusParticipantes.${currentUser.uid}`]: pessoaNome,
-        [`members.${currentUser.uid}`]: true,
-        updatedAt: Date.now()
-      }, { merge: true });
-
-      await setDoc(getUserProfileRef(currentUser.uid), {
-        [`meByGroup.${grupo.id}`]: pessoaNome,
-        updatedAt: Date.now()
-      }, { merge: true });
-
-      const agora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      setSaveStatus('statusSyncedAt', { time: agora });
-    } catch (e) {
-      console.warn('Erro ao salvar vínculo de "Eu" por usuário:', e);
-      setSaveStatus('statusSaveError');
-    } finally {
-      setTimeout(() => {
-        isSavingCloud = false;
-      }, 300);
-    }
+      localStorage.setItem(ME_BY_GROUP_STORAGE_KEY, JSON.stringify(meByGroupCache));
+    } catch {}
   }
 }
 
 async function persistirNomeNoPerfil(nome) {
   const limpo = String(nome || '').trim();
   if (!limpo) return;
-  salvarNomeUsuarioLocal(limpo, currentUser?.uid);
+  salvarNomeUsuarioLocal(limpo);
   if (currentUser) {
     try {
       if (currentUser.displayName !== limpo) {
@@ -344,15 +269,22 @@ function gerarId(prefixo) {
   return `${prefixo}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 }
 
+function normalizarDataISOOrdenacao(dataStr) {
+  if (!dataStr || typeof dataStr !== 'string') return '0000-00-00';
+  const limpo = dataStr.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(limpo)) return limpo;
+  const brMatch = limpo.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (brMatch) return `${brMatch[3]}-${brMatch[2]}-${brMatch[1]}`;
+  return '0000-00-00';
+}
+
 function ordenarLancamentosPorData(lista) {
-  return (Array.isArray(lista) ? lista : [])
+  return (lista || [])
     .map((item, idx) => ({ item, idx }))
     .sort((a, b) => {
-      const da = a.item?.data || '';
-      const db = b.item?.data || '';
-      if (da !== db) {
-        return db.localeCompare(da);
-      }
+      const da = normalizarDataISOOrdenacao(a.item?.data);
+      const db = normalizarDataISOOrdenacao(b.item?.data);
+      if (db !== da) return db.localeCompare(da);
       return b.idx - a.idx;
     })
     .map(entry => entry.item);
@@ -380,41 +312,148 @@ function criarGrupoPadrao(id = DEFAULT_GROUP_ID, nome = 'Grupo Principal') {
     id,
     nome,
     pessoas: [],
-    meusParticipantes: {},
+    participantesSemApp: [],
     meuParticipante: null,
     gastos: [],
     taxasCambio: {}
   };
 }
 
+function parseNumeroFlexivel(v) {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  if (typeof v === 'string') {
+    const limpo = v.replace(/[^\d,.-]/g, '').trim();
+    if (!limpo) return 0;
+    // Se tiver vírgula e ponto, assume ponto como milhar e vírgula como decimal
+    const normalizado = (limpo.includes(',') && limpo.includes('.'))
+      ? limpo.replace(/\./g, '').replace(',', '.')
+      : limpo.replace(',', '.');
+    const n = parseFloat(normalizado);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+}
+
 function normalizarEstruturaGrupo(id, raw) {
   const g = raw && typeof raw === 'object' ? raw : {};
-  const pessoas = Array.isArray(g.pessoas) ? g.pessoas : [];
-  const meusParticipantes = g.meusParticipantes && typeof g.meusParticipantes === 'object'
-    ? { ...g.meusParticipantes }
-    : {};
+  const pessoas = Array.isArray(g.pessoas) ? [...g.pessoas] : [];
 
-  for (const [uidKey, boundName] of Object.entries(meusParticipantes)) {
-    if (!pessoas.includes(boundName)) {
-      delete meusParticipantes[uidKey];
+  const resolverNomePessoa = (nomeCandidato) => {
+    if (!nomeCandidato || typeof nomeCandidato !== 'string') return '';
+    const limpo = nomeCandidato.trim();
+    if (!limpo) return '';
+    if (pessoas.includes(limpo)) return limpo;
+    const alvo = normalizarTexto(limpo);
+    const achado = pessoas.find(p => normalizarTexto(p) === alvo);
+    if (achado) return achado;
+    // Se o nome existe no pagamento/gasto mas não estava na lista pessoas, inclui para não sumir do cálculo
+    pessoas.push(limpo);
+    return limpo;
+  };
+
+  const participantesSemApp = Array.isArray(g.participantesSemApp)
+    ? g.participantesSemApp.map(resolverNomePessoa).filter(Boolean)
+    : [];
+
+  let meuParticipante = typeof g.meuParticipante === 'string'
+    ? resolverNomePessoa(g.meuParticipante)
+    : (meByGroupCache[id] ? resolverNomePessoa(meByGroupCache[id]) : null);
+
+  if (!meuParticipante && currentUserName && pessoas.length > 0) {
+    const alvo = normalizarTexto(currentUserName);
+    const match = pessoas.find(p => normalizarTexto(p) === alvo);
+    if (match) meuParticipante = match;
+  }
+
+  const gastosBrutos = Array.isArray(g.gastos) ? [...g.gastos] : [];
+  // Caso o JSON tenha um array separado de pagamentos/quitações/acertos, junta também
+  const extrasPagamento = [
+    ...(Array.isArray(g.pagamentos) ? g.pagamentos : []),
+    ...(Array.isArray(g.quitacoes) ? g.quitacoes : []),
+    ...(Array.isArray(g.acertos) ? g.acertos : [])
+  ].map(item => ({ ...(item || {}), tipo: 'pagamento' }));
+
+  const todosLancamentos = [...gastosBrutos, ...extrasPagamento];
+
+  const gastosNormalizados = todosLancamentos.map(item => {
+    if (!item || typeof item !== 'object') return null;
+
+    const tipoNorm = String(item.tipo || '').toLowerCase().trim();
+    const parecePagamento =
+      tipoNorm === 'pagamento' ||
+      tipoNorm === 'quitacao' ||
+      tipoNorm === 'quitação' ||
+      tipoNorm === 'acerto' ||
+      tipoNorm === 'settlement' ||
+      Boolean(item.de || item.from || item.recebedor || item.para || item.quemRecebeu);
+
+    if (parecePagamento) {
+      const de = resolverNomePessoa(
+        item.de ?? item.from ?? item.quemPagou ?? item.origem ?? item.pagador
+      );
+      const para = resolverNomePessoa(
+        item.para ?? item.to ?? item.quemRecebeu ?? item.recebedor ?? item.destino
+      );
+
+      const moeda = item.moeda || 'BRL';
+      const taxaCambio = parseNumeroFlexivel(item.taxaCambio) > 0 ? parseNumeroFlexivel(item.taxaCambio) : 1;
+      const valBruto = parseNumeroFlexivel(item.valor);
+      const valBRLBruto = parseNumeroFlexivel(item.valorBRL);
+      const valorBRL = valBRLBruto > 0 ? valBRLBruto : (valBruto * (moeda === 'BRL' ? 1 : taxaCambio));
+      const valorOriginal = valBruto > 0 ? valBruto : valorBRL;
+
+      return {
+        ...item,
+        id: item.id || gerarId('pgt'),
+        tipo: 'pagamento',
+        de,
+        para,
+        moeda,
+        taxaCambio,
+        valor: valorOriginal,
+        valorBRL,
+        data: item.data || getTodayISO(),
+        descricao: item.descricao || (item.obs ? t('settlementObsDesc', { obs: item.obs }) : t('settlementDefaultDesc'))
+      };
     }
-  }
 
-  const uid = currentUser?.uid || null;
-  const cacheUid = lerCacheMeDoUsuario(uid);
-  if (uid && !meusParticipantes[uid] && cacheUid[id] && pessoas.includes(cacheUid[id])) {
-    meusParticipantes[uid] = cacheUid[id];
-  }
+    const pagador = resolverNomePessoa(item.pagador ?? item.quemPagou ?? item.de);
+    const moeda = item.moeda || 'BRL';
+    const taxaCambio = parseNumeroFlexivel(item.taxaCambio) > 0 ? parseNumeroFlexivel(item.taxaCambio) : 1;
+    const valBruto = parseNumeroFlexivel(item.valor);
+    const valBRLBruto = parseNumeroFlexivel(item.valorBRL);
+    const valorBRL = valBRLBruto > 0 ? valBRLBruto : (valBruto * (moeda === 'BRL' ? 1 : taxaCambio));
+
+    const divisaoObj = {};
+    if (item.divisao && typeof item.divisao === 'object') {
+      for (const [k, v] of Object.entries(item.divisao)) {
+        const nomeChave = resolverNomePessoa(k);
+        if (nomeChave) {
+          divisaoObj[nomeChave] = parseNumeroFlexivel(v);
+        }
+      }
+    }
+
+    return {
+      ...item,
+      id: item.id || gerarId('gst'),
+      tipo: item.tipo || 'despesa',
+      pagador,
+      moeda,
+      taxaCambio,
+      valor: valBruto > 0 ? valBruto : valorBRL,
+      valorBRL,
+      divisao: divisaoObj
+    };
+  }).filter(Boolean);
 
   return {
     id: g.id || id,
     nome: g.nome || 'Grupo',
     pessoas,
-    meusParticipantes,
-    meuParticipante: typeof g.meuParticipante === 'string' && pessoas.includes(g.meuParticipante)
-      ? g.meuParticipante
-      : null,
-    gastos: Array.isArray(g.gastos) ? g.gastos : [],
+    participantesSemApp,
+    meuParticipante,
+    gastos: gastosNormalizados,
     taxasCambio: g.taxasCambio && typeof g.taxasCambio === 'object' ? g.taxasCambio : {}
   };
 }
@@ -465,14 +504,18 @@ async function garantirPerfilUsuarioNaNuvem(user) {
   const userRef = getUserProfileRef(user.uid);
   const snap = await getDoc(userRef);
 
-  const nomeSalvoLocal = carregarNomeUsuarioLocal(user.uid);
+  const nomeSalvoLocal = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
   const nomeEfetivo = nomeSalvoLocal || user.displayName || user.email?.split('@')[0] || '';
-  if (nomeEfetivo) {
-    salvarNomeUsuarioLocal(nomeEfetivo, user.uid);
+  if (nomeEfetivo && !currentUserName) {
+    salvarNomeUsuarioLocal(nomeEfetivo);
   }
 
   if (!snap.exists()) {
     const inicial = criarGrupoPadrao(DEFAULT_GROUP_ID, 'Grupo Principal');
+    if (nomeEfetivo) {
+      inicial.pessoas.push(nomeEfetivo);
+      inicial.meuParticipante = nomeEfetivo;
+    }
     await setDoc(getGroupDocRef(DEFAULT_GROUP_ID), {
       ...inicial,
       ownerUid: user.uid,
@@ -485,7 +528,6 @@ async function garantirPerfilUsuarioNaNuvem(user) {
       displayName: nomeEfetivo,
       groupIds: [DEFAULT_GROUP_ID],
       activeGroupId: DEFAULT_GROUP_ID,
-      meByGroup: lerCacheMeDoUsuario(user.uid),
       updatedAt: Date.now()
     });
 
@@ -493,8 +535,7 @@ async function garantirPerfilUsuarioNaNuvem(user) {
       email: user.email || '',
       displayName: nomeEfetivo,
       groupIds: [DEFAULT_GROUP_ID],
-      activeGroupId: DEFAULT_GROUP_ID,
-      meByGroup: lerCacheMeDoUsuario(user.uid)
+      activeGroupId: DEFAULT_GROUP_ID
     };
   }
 
@@ -508,21 +549,14 @@ async function garantirPerfilUsuarioNaNuvem(user) {
 
   const nomeNuvem = data.displayName || user.displayName || nomeSalvoLocal || '';
   if (nomeNuvem) {
-    salvarNomeUsuarioLocal(nomeNuvem, user.uid);
+    salvarNomeUsuarioLocal(nomeNuvem);
   }
-
-  const cacheAtual = lerCacheMeDoUsuario(user.uid);
-  const meNuvem = data.meByGroup && typeof data.meByGroup === 'object' ? data.meByGroup : {};
-  const cacheMesclado = { ...cacheAtual, ...meNuvem };
-  meByGroupCache = cacheMesclado;
-  salvarCacheMeDoUsuario(user.uid, cacheMesclado);
 
   await setDoc(userRef, {
     email: user.email || data.email || '',
     displayName: nomeNuvem || nomeEfetivo,
     groupIds,
     activeGroupId,
-    meByGroup: cacheMesclado,
     updatedAt: Date.now()
   }, { merge: true });
 
@@ -530,8 +564,7 @@ async function garantirPerfilUsuarioNaNuvem(user) {
     ...data,
     displayName: nomeNuvem || nomeEfetivo,
     groupIds,
-    activeGroupId,
-    meByGroup: cacheMesclado
+    activeGroupId
   };
 }
 
@@ -587,18 +620,14 @@ async function salvarGrupoNaNuvem(grupo) {
       id: grupo.id,
       nome: grupo.nome,
       pessoas: grupo.pessoas || [],
-      meusParticipantes: grupo.meusParticipantes || {},
+      participantesSemApp: grupo.participantesSemApp || [],
+      meuParticipante: grupo.meuParticipante || null,
       gastos: grupo.gastos || [],
       taxasCambio: grupo.taxasCambio || {},
       [`members.${currentUser.uid}`]: true,
       updatedAt: Date.now(),
       updatedBy: currentUser.uid
     };
-
-    if (grupo.meusParticipantes?.[currentUser.uid]) {
-      payload[`meusParticipantes.${currentUser.uid}`] = grupo.meusParticipantes[currentUser.uid];
-    }
-
     await setDoc(groupRef, payload, { merge: true });
     cloudGroupsCache[grupo.id] = normalizarEstruturaGrupo(grupo.id, payload);
     const agora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -647,6 +676,11 @@ async function carregarGruposDoUsuario(userData) {
 
   if (groupIds.length === 0) {
     const padrao = criarGrupoPadrao(DEFAULT_GROUP_ID, 'Grupo Principal');
+    const nomeEfetivo = getNomeUsuarioEfetivo();
+    if (nomeEfetivo) {
+      padrao.pessoas.push(nomeEfetivo);
+      padrao.meuParticipante = nomeEfetivo;
+    }
     state.grupos = { [padrao.id]: padrao };
     state.grupoAtivoId = padrao.id;
     await salvarGrupoNaNuvem(padrao);
@@ -677,6 +711,11 @@ async function carregarGruposDoUsuario(userData) {
 
   if (Object.keys(novosGrupos).length === 0) {
     const padrao = criarGrupoPadrao(DEFAULT_GROUP_ID, 'Grupo Principal');
+    const nomeEfetivo = getNomeUsuarioEfetivo();
+    if (nomeEfetivo) {
+      padrao.pessoas.push(nomeEfetivo);
+      padrao.meuParticipante = nomeEfetivo;
+    }
     novosGrupos[padrao.id] = padrao;
     await salvarGrupoNaNuvem(padrao);
   }
@@ -737,28 +776,11 @@ function assinarPerfilUsuario(uid) {
   unsubscribeUserDoc = onSnapshot(userRef, async (snap) => {
     if (!snap.exists() || isSavingCloud) return;
     const data = snap.data();
-
     if (data.displayName && data.displayName !== currentUserName) {
-      salvarNomeUsuarioLocal(data.displayName, uid);
+      salvarNomeUsuarioLocal(data.displayName);
       renderAuthUI();
       renderTudo();
     }
-
-    if (data.meByGroup && typeof data.meByGroup === 'object') {
-      const cacheAtual = lerCacheMeDoUsuario(uid);
-      const mesclado = { ...cacheAtual, ...data.meByGroup };
-      meByGroupCache = mesclado;
-      salvarCacheMeDoUsuario(uid, mesclado);
-
-      for (const [gid, nomeMe] of Object.entries(mesclado)) {
-        if (state.grupos[gid] && state.grupos[gid].pessoas.includes(nomeMe)) {
-          state.grupos[gid].meusParticipantes = state.grupos[gid].meusParticipantes || {};
-          state.grupos[gid].meusParticipantes[uid] = nomeMe;
-        }
-      }
-      renderTudo();
-    }
-
     const groupIds = Array.isArray(data.groupIds) ? data.groupIds : [];
     let mudouLista = false;
 
@@ -864,7 +886,7 @@ function traduzirErroAuth(err) {
     'auth/wrong-password': 'Senha incorreta.',
     'auth/invalid-credential': 'E-mail ou senha inválidos.',
     'auth/email-already-in-use': 'Este e-mail já está cadastrado.',
-    'auth/weak-password': 'A senha deve ter pelo menos 6 caracteres.',
+    'auth/weak-password': 'A senha deve pelo menos 6 caracteres.',
     'auth/popup-closed-by-user': 'Login cancelado antes de concluir.',
     'auth/network-request-failed': 'Erro de rede. Verifique sua conexão.'
   };
@@ -887,7 +909,7 @@ function initAuthListeners() {
     const nomeCadastro = authMode === 'register'
       ? (document.getElementById('auth-name')?.value?.trim() || '')
       : '';
-    if (nomeCadastro) salvarNomeUsuarioLocal(nomeCadastro, null);
+    if (nomeCadastro) salvarNomeUsuarioLocal(nomeCadastro);
 
     try {
       await aplicarPersistenciaEscolhida();
@@ -927,7 +949,7 @@ function initAuthListeners() {
       if (!isRegister) {
         await signInWithEmailAndPassword(auth, email, senha);
       } else {
-        salvarNomeUsuarioLocal(nomeCadastro, null);
+        salvarNomeUsuarioLocal(nomeCadastro);
         const cred = await createUserWithEmailAndPassword(auth, email, senha);
         if (cred.user) {
           await updateProfile(cred.user, { displayName: nomeCadastro });
@@ -947,24 +969,16 @@ function initAuthListeners() {
       unsubscribeUserDoc();
       unsubscribeUserDoc = null;
     }
-    currentUserName = '';
-    meByGroupCache = {};
     await signOut(auth);
   });
 
   onAuthStateChanged(auth, async (user) => {
     currentUser = user || null;
     if (currentUser) {
-      const nomeCadastro = authMode === 'register'
-        ? (document.getElementById('auth-name')?.value?.trim() || '')
-        : '';
-      currentUserName = nomeCadastro || carregarNomeUsuarioLocal(currentUser.uid);
-      meByGroupCache = lerCacheMeDoUsuario(currentUser.uid);
-
-      if (nomeCadastro) {
-        salvarNomeUsuarioLocal(nomeCadastro, currentUser.uid);
+      if (authMode === 'register') {
+        const nomeCadastro = document.getElementById('auth-name')?.value?.trim();
+        if (nomeCadastro) salvarNomeUsuarioLocal(nomeCadastro);
       }
-
       renderAuthUI();
       setSaveStatus('statusConnecting');
       try {
@@ -975,16 +989,12 @@ function initAuthListeners() {
         if (currentUserName) {
           await persistirNomeNoPerfil(currentUserName);
         }
-        renderAuthUI();
-        renderTudo();
       } catch (e) {
         console.error('Erro ao inicializar dados do usuário:', e);
         setSaveStatus('statusOffline');
         renderTudo();
       }
     } else {
-      currentUserName = '';
-      meByGroupCache = {};
       renderAuthUI();
       setSaveStatus('statusOffline');
     }
@@ -1042,6 +1052,15 @@ function initLanguageSwitcher() {
   });
 }
 
+// ==================== MENU 3 TRACINHOS ====================
+function setMenu3DotsAberto(aberto) {
+  menu3DotsAberto = Boolean(aberto);
+  const btn = document.getElementById('btn-menu-3dots');
+  const drop = document.getElementById('dropdown-3dots');
+  btn?.setAttribute('aria-expanded', String(menu3DotsAberto));
+  drop?.classList.toggle('hidden', !menu3DotsAberto);
+}
+
 // ==================== ACESSO E GERENCIAMENTO DE GRUPOS ====================
 function getGrupoAtivo() {
   if (!state.grupos[state.grupoAtivoId]) {
@@ -1058,21 +1077,27 @@ function getGrupoAtivo() {
 }
 
 function renderSeletorGrupos() {
+  const grupo = getGrupoAtivo();
   const select = document.getElementById('select-grupo');
-  if (!select) return;
-  select.innerHTML = '';
+  if (select) {
+    select.innerHTML = '';
+    Object.values(state.grupos).forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g.id;
+      opt.textContent = g.nome;
+      if (g.id === state.grupoAtivoId) opt.selected = true;
+      select.appendChild(opt);
+    });
+  }
 
-  Object.values(state.grupos).forEach(grupo => {
-    const opt = document.createElement('option');
-    opt.value = grupo.id;
-    opt.textContent = grupo.nome;
-    if (grupo.id === state.grupoAtivoId) opt.selected = true;
-    select.appendChild(opt);
-  });
+  const nomeDestaque = document.getElementById('grupo-destaque-nome');
+  if (nomeDestaque) {
+    nomeDestaque.textContent = grupo.nome;
+  }
 
-  const badgeCodigo = document.getElementById('badge-codigo-grupo');
-  if (badgeCodigo) {
-    badgeCodigo.textContent = `ID: ${state.grupoAtivoId}`;
+  const codigoVal = document.getElementById('menu-codigo-valor');
+  if (codigoVal) {
+    codigoVal.textContent = state.grupoAtivoId;
   }
 }
 
@@ -1095,12 +1120,18 @@ async function criarNovoGrupo() {
   const id = gerarId('grp');
   const novoGrupo = criarGrupoPadrao(id, nome.trim());
 
-  const nomeUsuario = getNomeUsuarioEfetivo();
+  let nomeUsuario = getNomeUsuarioEfetivo();
+  if (!nomeUsuario) {
+    const perguntado = prompt(t('askMyNamePrompt'));
+    if (perguntado && perguntado.trim()) {
+      nomeUsuario = perguntado.trim();
+      await persistirNomeNoPerfil(nomeUsuario);
+    }
+  }
+
   if (nomeUsuario) {
     novoGrupo.pessoas.push(nomeUsuario);
-    if (currentUser) {
-      novoGrupo.meusParticipantes[currentUser.uid] = nomeUsuario;
-    }
+    setMeParticipantName(novoGrupo, nomeUsuario);
   }
 
   state.grupos[id] = novoGrupo;
@@ -1108,9 +1139,6 @@ async function criarNovoGrupo() {
   filtroCategoriaAtual = 'todas';
   cancelarEdicao();
   await salvarGrupoNaNuvem(novoGrupo);
-  if (nomeUsuario) {
-    await setMeParticipantName(novoGrupo, nomeUsuario);
-  }
   if (currentUser) {
     await vincularGrupoAoUsuario(currentUser.uid, id, true);
   }
@@ -1141,6 +1169,11 @@ async function excluirOuSairDoGrupo() {
     const restantes = Object.keys(state.grupos);
     if (restantes.length === 0) {
       const padrao = criarGrupoPadrao(gerarId('grp'), 'Grupo Principal');
+      const nomeEfetivo = getNomeUsuarioEfetivo();
+      if (nomeEfetivo) {
+        padrao.pessoas.push(nomeEfetivo);
+        padrao.meuParticipante = nomeEfetivo;
+      }
       state.grupos[padrao.id] = padrao;
       state.grupoAtivoId = padrao.id;
       await salvarGrupoNaNuvem(padrao);
@@ -1170,6 +1203,11 @@ async function excluirOuSairDoGrupo() {
     const restantes = Object.keys(state.grupos);
     if (restantes.length === 0) {
       const padrao = criarGrupoPadrao(gerarId('grp'), 'Grupo Principal');
+      const nomeEfetivo = getNomeUsuarioEfetivo();
+      if (nomeEfetivo) {
+        padrao.pessoas.push(nomeEfetivo);
+        padrao.meuParticipante = nomeEfetivo;
+      }
       state.grupos[padrao.id] = padrao;
       state.grupoAtivoId = padrao.id;
       await salvarGrupoNaNuvem(padrao);
@@ -1235,17 +1273,20 @@ async function entrarPorCodigoOuLink() {
   }
 }
 
-// ==================== PARTICIPANTES E FUNÇÃO "EU" ====================
-async function adicionarParticipante(nomeRaw, marcarComoEu = false) {
+// ==================== PARTICIPANTES, SEM APP E FUNÇÃO "EU" ====================
+async function adicionarParticipante(nomeRaw, { marcarComoEu = false, semApp = false } = {}) {
   const nome = String(nomeRaw || '').trim();
   if (!nome) return false;
 
   const grupo = getGrupoAtivo();
+  grupo.participantesSemApp = Array.isArray(grupo.participantesSemApp) ? grupo.participantesSemApp : [];
   const existente = grupo.pessoas.find(p => normalizarTexto(p) === normalizarTexto(nome));
 
   if (existente) {
     if (marcarComoEu) {
-      await setMeParticipantName(grupo, existente);
+      grupo.participantesSemApp = grupo.participantesSemApp.filter(p => p !== existente);
+      setMeParticipantName(grupo, existente);
+      await salvarGrupoNaNuvem(grupo);
       renderTudo();
       return true;
     }
@@ -1254,11 +1295,14 @@ async function adicionarParticipante(nomeRaw, marcarComoEu = false) {
   }
 
   grupo.pessoas.push(nome);
-  await salvarGrupoNaNuvem(grupo);
+  if (semApp && !marcarComoEu) {
+    grupo.participantesSemApp.push(nome);
+  }
   if (marcarComoEu) {
-    await setMeParticipantName(grupo, nome);
+    setMeParticipantName(grupo, nome);
     await persistirNomeNoPerfil(nome);
   }
+  await salvarGrupoNaNuvem(grupo);
   renderTudo();
   return true;
 }
@@ -1281,12 +1325,13 @@ async function acionarBotaoEu() {
 
   const existente = grupo.pessoas.find(p => normalizarTexto(p) === normalizarTexto(nomeAlvo));
   if (existente) {
-    await setMeParticipantName(grupo, existente);
+    setMeParticipantName(grupo, existente);
+    await salvarGrupoNaNuvem(grupo);
     renderTudo();
     return;
   }
 
-  await adicionarParticipante(nomeAlvo, true);
+  await adicionarParticipante(nomeAlvo, { marcarComoEu: true, semApp: false });
 }
 
 async function removerParticipante(nome) {
@@ -1304,15 +1349,9 @@ async function removerParticipante(nome) {
   }
 
   grupo.pessoas = grupo.pessoas.filter(p => p !== nome);
+  grupo.participantesSemApp = (grupo.participantesSemApp || []).filter(p => p !== nome);
   if (grupo.meuParticipante === nome) {
     grupo.meuParticipante = null;
-  }
-  if (grupo.meusParticipantes && typeof grupo.meusParticipantes === 'object') {
-    for (const [uidKey, boundName] of Object.entries(grupo.meusParticipantes)) {
-      if (boundName === nome) {
-        delete grupo.meusParticipantes[uidKey];
-      }
-    }
   }
   await salvarGrupoNaNuvem(grupo);
   renderTudo();
@@ -1325,6 +1364,7 @@ function renderListaPessoas() {
   container.innerHTML = '';
 
   const meName = getMeParticipantName(grupo);
+  const semAppSet = new Set(grupo.participantesSemApp || []);
 
   if (grupo.pessoas.length === 0) {
     container.innerHTML = `<span class="empty-state-text">${escapeHTML(t('noParticipantsGroup'))}</span>`;
@@ -1333,6 +1373,7 @@ function renderListaPessoas() {
 
   grupo.pessoas.forEach(pessoa => {
     const isMe = pessoa === meName;
+    const isUnlinked = !isMe && semAppSet.has(pessoa);
     const tag = document.createElement('span');
     tag.className = isMe ? 'tag tag-is-me' : 'tag';
 
@@ -1345,6 +1386,11 @@ function renderListaPessoas() {
       euBadge.className = 'tag-eu-badge';
       euBadge.textContent = t('meBadge');
       tag.appendChild(euBadge);
+    } else if (isUnlinked) {
+      const unlinkedNote = document.createElement('span');
+      unlinkedNote.className = 'tag-unlinked-note';
+      unlinkedNote.textContent = t('unlinkedParticipantTag');
+      tag.appendChild(unlinkedNote);
     }
 
     const btnRem = document.createElement('button');
@@ -1467,10 +1513,13 @@ async function buscarCotacaoMoeda(moeda) {
 // ==================== FORMULÁRIO DE GASTOS E DIVISÃO ====================
 function setFormGastoVisivel(visivel) {
   formGastoAberto = Boolean(visivel);
-  const btnAbrir = document.getElementById('btn-abrir-form-gasto');
-  const container = document.getElementById('container-form-gasto');
-  btnAbrir?.classList.toggle('hidden', formGastoAberto);
-  container?.classList.toggle('hidden', !formGastoAberto);
+  const modalGasto = document.getElementById('modal-form-gasto');
+  const containerForm = document.getElementById('container-form-gasto');
+
+  modalGasto?.classList.toggle('hidden', !formGastoAberto);
+  if (containerForm) {
+    containerForm.classList.toggle('hidden', !formGastoAberto);
+  }
 }
 
 function renderPagadorSelect() {
@@ -1861,54 +1910,68 @@ function calcularBalancoGrupo(grupo) {
     };
   });
 
-  const devedorParaCredor = {};
-  pessoas.forEach(de => {
-    devedorParaCredor[de] = {};
-    pessoas.forEach(para => {
-      if (de !== para) devedorParaCredor[de][para] = 0;
-    });
-  });
+  // Helper para achar a chave exata em `stats` mesmo com diferença de caixa/acentos
+  const acharChaveStats = (nome) => {
+    if (!nome) return null;
+    if (stats[nome]) return nome;
+    const alvo = String(nome).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    return Object.keys(stats).find(k =>
+      k.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim() === alvo
+    ) || null;
+  };
 
   for (const g of gastos) {
-    const valBRL = getValorEmBRL(g);
+    if (!g) continue;
+    const valBRL = Number(getValorEmBRL(g)) || 0;
 
-    if (g.tipo === 'pagamento') {
-      if (stats[g.de]) stats[g.de].acertosLiquidos += valBRL;
-      if (stats[g.para]) stats[g.para].acertosLiquidos -= valBRL;
-      if (devedorParaCredor[g.para]?.[g.de] !== undefined) {
-        devedorParaCredor[g.para][g.de] -= valBRL;
-      }
+    const tipoNorm = String(g.tipo || '').toLowerCase().trim();
+    const ehPagamento =
+      tipoNorm === 'pagamento' ||
+      tipoNorm === 'quitacao' ||
+      tipoNorm === 'quitação' ||
+      tipoNorm === 'acerto' ||
+      tipoNorm === 'settlement';
+
+   if (g.tipo === 'pagamento') {
+      const { de: deRaw, para: paraRaw } = extrairPartesPagamento(g);
+      const chaveDe = acharChaveStats ? acharChaveStats(deRaw) : deRaw;
+      const chavePara = acharChaveStats ? acharChaveStats(paraRaw) : paraRaw;
+
+      if (chaveDe && stats[chaveDe]) stats[chaveDe].acertosLiquidos += valBRL;
+      if (chavePara && stats[chavePara]) stats[chavePara].acertosLiquidos -= valBRL;
       continue;
     }
 
-    if (stats[g.pagador]) {
-      stats[g.pagador].pagou += valBRL;
+    const chavePagador = acharChaveStats(g.pagador);
+    if (chavePagador && stats[chavePagador]) {
+      stats[chavePagador].pagou += valBRL;
     }
 
     const divisao = g.divisao || {};
     for (const [pessoa, share] of Object.entries(divisao)) {
       const parte = Number(share) || 0;
-      if (stats[pessoa]) {
-        stats[pessoa].consumiu += parte;
-      }
-      if (g.pagador && pessoa !== g.pagador && devedorParaCredor[pessoa]?.[g.pagador] !== undefined) {
-        devedorParaCredor[pessoa][g.pagador] += parte;
+      const chavePessoa = acharChaveStats(pessoa);
+      if (chavePessoa && stats[chavePessoa]) {
+        stats[chavePessoa].consumiu += parte;
       }
     }
   }
-
-  pessoas.forEach(p => {
-    const s = stats[p];
-    s.saldo = Math.round((s.pagou - s.consumiu + s.acertosLiquidos) * 100) / 100;
-  });
 
   const credores = [];
   const devedores = [];
 
   pessoas.forEach(p => {
-    const s = stats[p].saldo;
-    if (s > 0.01) credores.push({ pessoa: p, valor: s });
-    else if (s < -0.01) devedores.push({ pessoa: p, valor: Math.abs(s) });
+    const s = stats[p];
+    s.pagou = Math.round(s.pagou * 100) / 100;
+    s.consumiu = Math.round(s.consumiu * 100) / 100;
+    s.acertosLiquidos = Math.round(s.acertosLiquidos * 100) / 100;
+    s.saldo = Math.round((s.pagou - s.consumiu + s.acertosLiquidos) * 100) / 100;
+
+    if (s.saldo > 0.01) {
+      credores.push({ pessoa: p, valor: s.saldo });
+    } else if (s.saldo < -0.01) {
+      devedores.push({ pessoa: p, valor: Math.round(Math.abs(s.saldo) * 100) / 100 });
+    }
   });
 
   credores.sort((a, b) => b.valor - a.valor);
@@ -1921,14 +1984,13 @@ function calcularBalancoGrupo(grupo) {
   while (i < devedores.length && j < credores.length) {
     const dev = devedores[i];
     const cred = credores[j];
-    const quantia = Math.min(dev.valor, cred.valor);
-    const arred = Math.round(quantia * 100) / 100;
+    const quantia = Math.round(Math.min(dev.valor, cred.valor) * 100) / 100;
 
-    if (arred > 0.01) {
+    if (quantia > 0.01) {
       transferencias.push({
         de: dev.pessoa,
         para: cred.pessoa,
-        valor: arred
+        valor: quantia
       });
     }
 
@@ -1958,7 +2020,6 @@ function renderMeuSaldoDestaque(grupo, stats, transferencias) {
   if (!meName || !stats[meName]) {
     box.innerHTML = `
       <div class="meu-saldo-top">
-        <span class="meu-saldo-titulo">${escapeHTML(t('myBalanceHeading', { name: getNomeUsuarioEfetivo() || t('meBadge') }))}</span>
         <span class="empty-state-text">${escapeHTML(t('myBalanceLinkHint'))}</span>
       </div>
     `;
@@ -1967,41 +2028,43 @@ function renderMeuSaldoDestaque(grupo, stats, transferencias) {
 
   const meuSaldo = stats[meName].saldo || 0;
   const classeSaldo = meuSaldo > 0.01 ? 'positivo' : (meuSaldo < -0.01 ? 'negativo' : 'neutro');
-  const sinal = meuSaldo > 0.01 ? '+' : '';
+  const valorAbsFmt = formatMoney(Math.abs(meuSaldo), 'BRL');
+
+  let fraseResumoTopo = t('myBalanceZero');
+  if (meuSaldo < -0.01) {
+    fraseResumoTopo = t('myBalancePayTotal', { val: valorAbsFmt });
+  } else if (meuSaldo > 0.01) {
+    fraseResumoTopo = t('myBalanceReceiveTotal', { val: valorAbsFmt });
+  }
 
   const aReceber = transferencias.filter(tr => tr.para === meName);
   const aPagar = transferencias.filter(tr => tr.de === meName);
 
   let linhasHTML = '';
-  if (aReceber.length === 0 && aPagar.length === 0) {
-    linhasHTML = `<div class="meu-saldo-linha"><span class="neutro">${escapeHTML(t('myBalanceZero'))}</span></div>`;
-  } else {
-    aReceber.forEach(tr => {
-      linhasHTML += `
-        <div class="meu-saldo-linha">
-          <span>${escapeHTML(t('myBalanceReceiveFrom'))} <strong>${escapeHTML(tr.de)}</strong></span>
-          <strong class="positivo">+${escapeHTML(formatMoney(tr.valor, 'BRL'))}</strong>
-        </div>
-      `;
-    });
-    aPagar.forEach(tr => {
-      linhasHTML += `
-        <div class="meu-saldo-linha">
-          <span>${escapeHTML(t('myBalancePayTo'))} <strong>${escapeHTML(tr.para)}</strong>
-            <button type="button" class="btn-quitar-rapido" data-quitar-de="${escapeHTML(tr.de)}" data-quitar-para="${escapeHTML(tr.para)}" data-quitar-valor="${tr.valor.toFixed(2)}">${escapeHTML(t('quickSettleBtn'))}</button>
-          </span>
-          <strong class="negativo">-${escapeHTML(formatMoney(tr.valor, 'BRL'))}</strong>
-        </div>
-      `;
-    });
-  }
+  aReceber.forEach(tr => {
+    linhasHTML += `
+      <div class="meu-saldo-linha">
+        <span>${escapeHTML(t('myBalanceReceiveFrom'))} <strong>${escapeHTML(tr.de)}</strong></span>
+        <strong class="positivo">+${escapeHTML(formatMoney(tr.valor, 'BRL'))}</strong>
+      </div>
+    `;
+  });
+  aPagar.forEach(tr => {
+    linhasHTML += `
+      <div class="meu-saldo-linha">
+        <span>${escapeHTML(t('myBalancePayTo'))} <strong>${escapeHTML(tr.para)}</strong>
+          <button type="button" class="btn-quitar-rapido" data-quitar-de="${escapeHTML(tr.de)}" data-quitar-para="${escapeHTML(tr.para)}" data-quitar-valor="${tr.valor.toFixed(2)}">${escapeHTML(t('quickSettleBtn'))}</button>
+        </span>
+        <strong class="negativo">-${escapeHTML(formatMoney(tr.valor, 'BRL'))}</strong>
+      </div>
+    `;
+  });
 
   box.innerHTML = `
     <div class="meu-saldo-top">
-      <span class="meu-saldo-titulo">👤 ${escapeHTML(t('myBalanceHeading', { name: meName }))}</span>
-      <span class="meu-saldo-total ${classeSaldo}">${sinal}${escapeHTML(formatMoney(meuSaldo, 'BRL'))}</span>
+      <span class="meu-saldo-titulo ${classeSaldo}">${escapeHTML(fraseResumoTopo)}</span>
     </div>
-    <div class="meu-saldo-detalhes">${linhasHTML}</div>
+    ${linhasHTML ? `<div class="meu-saldo-detalhes">${linhasHTML}</div>` : ''}
   `;
 
   box.querySelectorAll('.btn-quitar-rapido').forEach(btn => {
@@ -2039,9 +2102,11 @@ function renderSaldosEAcertos() {
 
     const classeCor = saldo > 0.01 ? 'positivo' : (saldo < -0.01 ? 'negativo' : 'neutro');
     const sinal = saldo > 0.01 ? '+' : '';
+    const statusTxt = saldo > 0.01 ? t('statusReceiveShort') : (saldo < -0.01 ? t('statusPayShort') : t('statusSettledShort'));
 
     card.innerHTML = `
       <div class="saldo-nome">${escapeHTML(p)}${isMe ? ` (${escapeHTML(t('meBadge'))})` : ''}</div>
+      <div class="saldo-status-label ${classeCor}">${escapeHTML(statusTxt)}</div>
       <div class="saldo-valor ${classeCor}">${sinal}${escapeHTML(formatMoney(saldo, 'BRL'))}</div>
     `;
     grid.appendChild(card);
@@ -2116,7 +2181,20 @@ function getLancamentosFiltrados(grupo) {
   }
   return lista.filter(g => g.tipo !== 'pagamento' && g.categoria === filtroCategoriaAtual);
 }
+function extrairPartesPagamento(g) {
+  const de = g?.de ?? g?.from ?? g?.quemPagou ?? g?.origem ?? g?.pagador ?? '';
 
+  let para = g?.para ?? g?.to ?? g?.quemRecebeu ?? g?.recebedor ?? g?.destino ?? '';
+  if (!para && Array.isArray(g?.participantes) && g.participantes.length > 0) {
+    para = g.participantes[0];
+  }
+  if (!para && g?.divisao && typeof g.divisao === 'object') {
+    const chaves = Object.keys(g.divisao).filter(k => k !== de);
+    if (chaves.length > 0) para = chaves[0];
+  }
+
+  return { de: String(de || '').trim(), para: String(para || '').trim() };
+}
 function renderHistorico() {
   const grupo = getGrupoAtivo();
   const ul = document.getElementById('lista-gastos');
@@ -2128,28 +2206,26 @@ function renderHistorico() {
   const totalDespesasBRL = despesas.reduce((acc, g) => acc + getValorEmBRL(g), 0);
 
   if (badgeTotal) {
-    badgeTotal.textContent = `${t('totalSpentBadge')}: ${formatMoney(totalDespesasBRL, 'BRL')}`;
+    badgeTotal.textContent = formatMoney(totalDespesasBRL, 'BRL');
   }
 
-  const qtd = (grupo.gastos || []).length;
-  const palavraItens = qtd === 1 ? t('entrySingular') : t('entryPlural');
   if (btnToggle) {
     btnToggle.textContent = historicoAberto
-      ? t('collapseHistoryBtn', { n: qtd, items: palavraItens })
-      : t('viewHistoryBtn', { n: qtd, items: palavraItens });
+      ? t('collapseHistorySimpleBtn')
+      : t('viewHistorySimpleBtn');
   }
   containerHist?.classList.toggle('hidden', !historicoAberto);
 
   if (!ul) return;
   ul.innerHTML = '';
 
-  const filtrados = ordenarLancamentosPorData(getLancamentosFiltrados(grupo));
-  if (filtrados.length === 0) {
+  const filtradosOrdenados = ordenarLancamentosPorData(getLancamentosFiltrados(grupo));
+  if (filtradosOrdenados.length === 0) {
     ul.innerHTML = `<li class="empty-state-text">${escapeHTML(t('noEntriesFilter'))}</li>`;
     return;
   }
 
-  filtrados.forEach(g => {
+  filtradosOrdenados.forEach(g => {
     const li = document.createElement('li');
     const valBRL = getValorEmBRL(g);
     const moeda = g.moeda || 'BRL';
@@ -2158,12 +2234,14 @@ function renderHistorico() {
       : `${formatMoney(g.valor, moeda)} (${formatMoney(valBRL, 'BRL')})`;
 
     if (g.tipo === 'pagamento') {
+      const { de: pagadorNome, para: recebedorNome } = extrairPartesPagamento(g);
+
       li.className = 'gasto-item item-pagamento';
       const obsText = g.obs ? ` • ${g.obs}` : '';
       const dataText = g.data ? `${formatDateBR(g.data)} • ` : '';
       li.innerHTML = `
         <div class="gasto-info">
-          <strong><span class="badge-pagamento">${escapeHTML(t('settlementBadge'))}</span>${escapeHTML(g.de)} ${escapeHTML(t('paidToText'))} ${escapeHTML(g.para)}</strong>
+          <strong><span class="badge-pagamento">${escapeHTML(t('settlementBadge'))}</span>${escapeHTML(pagadorNome || '?')} ${escapeHTML(t('paidToText'))} ${escapeHTML(recebedorNome || '?')}</strong>
           <small>${escapeHTML(dataText + (g.descricao || t('settlementDefaultDesc')) + obsText)}</small>
         </div>
         <div class="gasto-right">
@@ -2172,7 +2250,7 @@ function renderHistorico() {
         </div>
       `;
       li.querySelector('.btn-del-gasto')?.addEventListener('click', () => apagarLancamento(g.id));
-    } else {
+     } else {
       li.className = 'gasto-item';
       const catObj = getCategoriaObj(g.categoria);
       const catNome = getNomeCategoriaTraduzido(g.categoria);
@@ -2579,7 +2657,7 @@ function abrirModalGlobal() {
 function exportarBackupJSON() {
   const payload = {
     app: 'SplitRAO',
-    version: 6,
+    version: 8,
     exportedAt: new Date().toISOString(),
     userName: currentUserName,
     state
@@ -2601,21 +2679,62 @@ async function importarBackupJSON(file) {
     const gruposFonte = parsed?.state?.grupos || parsed?.grupos;
     if (!gruposFonte || typeof gruposFonte !== 'object') return;
 
-    for (const [gid, gdata] of Object.entries(gruposFonte)) {
-      const norm = normalizarEstruturaGrupo(gid, gdata);
+    let primeiroIdNovo = null;
+
+    for (const [chaveOriginal, gdata] of Object.entries(gruposFonte)) {
+      if (!gdata || typeof gdata !== 'object') continue;
+
+      // Garante um ID válido e único se vier vazio ou sem prefixo de grupo
+      const idCandidato = (typeof gdata.id === 'string' && gdata.id.trim())
+        ? gdata.id.trim()
+        : (typeof chaveOriginal === 'string' && chaveOriginal.trim() ? chaveOriginal.trim() : gerarId('grp'));
+
+      // Se já existe um grupo diferente com o mesmo ID e nomes distintos, gera novo ID para não colidir
+      const gid = (state.grupos[idCandidato] && state.grupos[idCandidato].nome !== gdata.nome)
+        ? gerarId('grp')
+        : idCandidato;
+
+      const norm = normalizarEstruturaGrupo(gid, { ...gdata, id: gid });
       state.grupos[gid] = norm;
-      await salvarGrupoNaNuvem(norm);
+      cloudGroupsCache[gid] = norm;
+
+      if (!primeiroIdNovo) primeiroIdNovo = gid;
+
       if (currentUser) {
-        await vincularGrupoAoUsuario(currentUser.uid, gid, false);
+        // Garante que o grupo não fique marcado como excluído e vincula o usuário
+        await setDoc(getGroupDocRef(gid), {
+          id: norm.id,
+          nome: norm.nome,
+          pessoas: norm.pessoas || [],
+          participantesSemApp: norm.participantesSemApp || [],
+          meuParticipante: norm.meuParticipante || null,
+          gastos: norm.gastos || [],
+          taxasCambio: norm.taxasCambio || {},
+          deleted: false,
+          [`members.${currentUser.uid}`]: true,
+          updatedAt: Date.now(),
+          updatedBy: currentUser.uid
+        }, { merge: true });
+
+        await vincularGrupoAoUsuario(currentUser.uid, gid, gid === primeiroIdNovo);
+      } else {
+        await salvarGrupoNaNuvem(norm);
       }
     }
-    const primeiroId = Object.keys(gruposFonte)[0];
-    if (primeiroId) {
-      await trocarGrupoAtivo(primeiroId);
+
+    if (primeiroIdNovo) {
+      state.grupoAtivoId = primeiroIdNovo;
+      filtroCategoriaAtual = 'todas';
+      cancelarEdicao();
+      salvarEstadoLocal();
+      if (currentUser) {
+        assinarGrupoAtivo(primeiroIdNovo);
+      }
+      renderTudo();
     }
-    renderTudo();
   } catch (e) {
     console.error('Erro ao importar JSON:', e);
+    setSaveStatus('statusSaveError');
   }
 }
 
@@ -2634,28 +2753,71 @@ function renderTudo() {
 
 // ==================== EVENT LISTENERS ====================
 function initListeners() {
+  document.getElementById('btn-menu-3dots')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setMenu3DotsAberto(!menu3DotsAberto);
+  });
+  document.getElementById('btn-fechar-form-gasto')?.addEventListener('click', () => {
+  setFormGastoVisivel(false);
+});
+  document.getElementById('dropdown-3dots')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+  });
+
+  document.addEventListener('click', () => {
+    if (menu3DotsAberto) setMenu3DotsAberto(false);
+  });
+
   document.getElementById('select-grupo')?.addEventListener('change', (e) => trocarGrupoAtivo(e.target.value));
   document.getElementById('btn-novo-grupo')?.addEventListener('click', criarNovoGrupo);
   document.getElementById('btn-renomear-grupo')?.addEventListener('click', renomearGrupoAtual);
-  document.getElementById('btn-excluir-grupo')?.addEventListener('click', excluirOuSairDoGrupo);
-  document.getElementById('btn-compartilhar-grupo')?.addEventListener('click', compartilharConviteGrupo);
-  document.getElementById('btn-entrar-codigo')?.addEventListener('click', entrarPorCodigoOuLink);
+  document.getElementById('btn-fab-novo-gasto')?.addEventListener('click', () => {
+  if (typeof cancelarEdicao === 'function') cancelarEdicao();
+  setFormGastoVisivel(true);
+  if (typeof renderPagadorSelect === 'function') renderPagadorSelect();
+  if (typeof renderAreaDivisao === 'function') renderAreaDivisao();
+});
+  document.getElementById('modal-form-gasto')?.addEventListener('click', (e) => {
+  if (e.target.id === 'modal-form-gasto') {
+    setFormGastoVisivel(false);
+  }
+});
+  document.getElementById('btn-excluir-grupo')?.addEventListener('click', async () => {
+    setMenu3DotsAberto(false);
+    await excluirOuSairDoGrupo();
+  });
 
-  document.getElementById('badge-codigo-grupo')?.addEventListener('click', async () => {
+  document.getElementById('btn-compartilhar-grupo')?.addEventListener('click', compartilharConviteGrupo);
+
+  document.getElementById('btn-entrar-codigo')?.addEventListener('click', async () => {
+    setMenu3DotsAberto(false);
+    await entrarPorCodigoOuLink();
+  });
+
+  document.getElementById('menu-copiar-codigo')?.addEventListener('click', async () => {
     const id = state.grupoAtivoId;
     try {
       await navigator.clipboard.writeText(id);
     } catch {}
-    const el = document.getElementById('badge-codigo-grupo');
-    if (el) {
-      const prev = el.textContent;
-      el.textContent = t('codeCopiedBadge');
-      setTimeout(() => { el.textContent = prev; }, 1600);
+    const labelEl = document.getElementById('menu-codigo-label');
+    if (labelEl) {
+      const prevHTML = labelEl.innerHTML;
+      labelEl.textContent = t('codeCopiedBadge');
+      setTimeout(() => {
+        labelEl.innerHTML = prevHTML;
+        const valEl = document.getElementById('menu-codigo-valor');
+        if (valEl) valEl.textContent = state.grupoAtivoId;
+      }, 1400);
     }
   });
 
-  document.getElementById('btn-exportar-json')?.addEventListener('click', exportarBackupJSON);
+  document.getElementById('btn-exportar-json')?.addEventListener('click', () => {
+    setMenu3DotsAberto(false);
+    exportarBackupJSON();
+  });
+
   document.getElementById('input-importar-json')?.addEventListener('change', (e) => {
+    setMenu3DotsAberto(false);
     if (e.target.files?.[0]) importarBackupJSON(e.target.files[0]);
     e.target.value = '';
   });
@@ -2664,7 +2826,7 @@ function initListeners() {
     e.preventDefault();
     const input = document.getElementById('nome-pessoa');
     if (!input?.value?.trim()) return;
-    const ok = await adicionarParticipante(input.value.trim(), false);
+    const ok = await adicionarParticipante(input.value.trim(), { marcarComoEu: false, semApp: true });
     if (ok) input.value = '';
   });
 
@@ -2876,7 +3038,10 @@ function initListeners() {
   });
   document.getElementById('btn-imprimir')?.addEventListener('click', () => window.print());
 
-  document.getElementById('btn-balanco-global')?.addEventListener('click', abrirModalGlobal);
+  document.getElementById('btn-balanco-global')?.addEventListener('click', () => {
+    setMenu3DotsAberto(false);
+    abrirModalGlobal();
+  });
   document.getElementById('btn-fechar-global')?.addEventListener('click', () => {
     document.getElementById('modal-global')?.classList.add('hidden');
   });
