@@ -21,7 +21,7 @@ import {
   browserSessionPersistence
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { LANG_STORAGE_KEY, createTranslator } from "./i18n.js";
-import { REGRAS_AUTO_CATEGORIA } from "./categorias-keywords.js"
+import { REGRAS_AUTO_CATEGORIA } from "./categorias-keywords.js";
 
 // ==================== CONFIGURAÇÃO FIREBASE ====================
 const firebaseConfig = {
@@ -99,13 +99,7 @@ const { t, getNomeCategoriaTraduzido } = createTranslator(() => currentLang);
 
 let currentUser = null;
 let currentUserName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
-let meByGroupCache = (() => {
-  try {
-    return JSON.parse(localStorage.getItem(ME_BY_GROUP_STORAGE_KEY) || '{}') || {};
-  } catch {
-    return {};
-  }
-})();
+let meByGroupCache = {};
 
 let authMode = 'login';
 let unsubscribeGroupDoc = null;
@@ -128,14 +122,47 @@ let formGastoAberto = false;
 let dataGastoSelecionada = '';
 
 // ==================== UTILITÁRIOS DE IDENTIDADE ("EU") ====================
-function salvarNomeUsuarioLocal(nome) {
+function getMeStorageKey(uid) {
+  return `${ME_BY_GROUP_STORAGE_KEY}_${uid || 'anon'}`;
+}
+
+function getUserNameStorageKey(uid) {
+  return `${USER_NAME_STORAGE_KEY}_${uid || 'anon'}`;
+}
+
+function lerCacheMeDoUsuario(uid) {
+  try {
+    return JSON.parse(localStorage.getItem(getMeStorageKey(uid)) || '{}') || {};
+  } catch {
+    return {};
+  }
+}
+
+function salvarCacheMeDoUsuario(uid, mapa) {
+  try {
+    localStorage.setItem(getMeStorageKey(uid), JSON.stringify(mapa || {}));
+  } catch {}
+}
+
+function salvarNomeUsuarioLocal(nome, uid = currentUser?.uid) {
   const limpo = String(nome || '').trim();
   currentUserName = limpo;
   if (limpo) {
-    localStorage.setItem(USER_NAME_STORAGE_KEY, limpo);
+    localStorage.setItem(getUserNameStorageKey(uid), limpo);
+    if (!uid) {
+      localStorage.setItem(USER_NAME_STORAGE_KEY, limpo);
+    }
   } else {
-    localStorage.removeItem(USER_NAME_STORAGE_KEY);
+    localStorage.removeItem(getUserNameStorageKey(uid));
+    if (!uid) {
+      localStorage.removeItem(USER_NAME_STORAGE_KEY);
+    }
   }
+}
+
+function carregarNomeUsuarioLocal(uid) {
+  if (!uid) return localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+  return localStorage.getItem(getUserNameStorageKey(uid)) || '';
 }
 
 function getNomeUsuarioEfetivo() {
@@ -152,15 +179,23 @@ function getNomeUsuarioEfetivo() {
 function getMeParticipantName(grupo) {
   if (!grupo || !Array.isArray(grupo.pessoas) || grupo.pessoas.length === 0) return null;
 
-  if (grupo.meuParticipante && grupo.pessoas.includes(grupo.meuParticipante)) {
-    return grupo.meuParticipante;
+  const uid = currentUser?.uid || null;
+  const mapaGrupo = grupo.meusParticipantes && typeof grupo.meusParticipantes === 'object'
+    ? grupo.meusParticipantes
+    : {};
+
+  // 1. Vínculo explícito do UID atual no documento do grupo
+  if (uid && mapaGrupo[uid] && grupo.pessoas.includes(mapaGrupo[uid])) {
+    return mapaGrupo[uid];
   }
 
-  const cachedMe = meByGroupCache[grupo.id];
-  if (cachedMe && grupo.pessoas.includes(cachedMe)) {
-    return cachedMe;
+  // 2. Cache local específico do UID atual
+  const cacheUid = lerCacheMeDoUsuario(uid);
+  if (grupo.id && cacheUid[grupo.id] && grupo.pessoas.includes(cacheUid[grupo.id])) {
+    return cacheUid[grupo.id];
   }
 
+  // 3. Correspondência automática pelo nome do usuário logado
   const meuNome = getNomeUsuarioEfetivo();
   if (meuNome) {
     const alvo = normalizarTexto(meuNome);
@@ -168,24 +203,69 @@ function getMeParticipantName(grupo) {
     if (match) return match;
   }
 
+  // 4. Fallback legado somente se não houver usuário autenticado
+  if (!uid && grupo.meuParticipante && grupo.pessoas.includes(grupo.meuParticipante)) {
+    return grupo.meuParticipante;
+  }
+
   return null;
 }
 
-function setMeParticipantName(grupo, pessoaNome) {
+async function setMeParticipantName(grupo, pessoaNome) {
   if (!grupo || !pessoaNome) return;
-  grupo.meuParticipante = pessoaNome;
+
+  grupo.meusParticipantes = grupo.meusParticipantes && typeof grupo.meusParticipantes === 'object'
+    ? { ...grupo.meusParticipantes }
+    : {};
+
+  const uid = currentUser?.uid || null;
+  if (uid) {
+    grupo.meusParticipantes[uid] = pessoaNome;
+  } else {
+    grupo.meuParticipante = pessoaNome;
+  }
+
   if (grupo.id) {
-    meByGroupCache[grupo.id] = pessoaNome;
+    const cacheUid = lerCacheMeDoUsuario(uid);
+    cacheUid[grupo.id] = pessoaNome;
+    meByGroupCache = cacheUid;
+    salvarCacheMeDoUsuario(uid, cacheUid);
+  }
+
+  salvarEstadoLocal();
+
+  if (currentUser && grupo.id) {
+    isSavingCloud = true;
+    setSaveStatus('statusSaving');
     try {
-      localStorage.setItem(ME_BY_GROUP_STORAGE_KEY, JSON.stringify(meByGroupCache));
-    } catch {}
+      await setDoc(getGroupDocRef(grupo.id), {
+        [`meusParticipantes.${currentUser.uid}`]: pessoaNome,
+        [`members.${currentUser.uid}`]: true,
+        updatedAt: Date.now()
+      }, { merge: true });
+
+      await setDoc(getUserProfileRef(currentUser.uid), {
+        [`meByGroup.${grupo.id}`]: pessoaNome,
+        updatedAt: Date.now()
+      }, { merge: true });
+
+      const agora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      setSaveStatus('statusSyncedAt', { time: agora });
+    } catch (e) {
+      console.warn('Erro ao salvar vínculo de "Eu" por usuário:', e);
+      setSaveStatus('statusSaveError');
+    } finally {
+      setTimeout(() => {
+        isSavingCloud = false;
+      }, 300);
+    }
   }
 }
 
 async function persistirNomeNoPerfil(nome) {
   const limpo = String(nome || '').trim();
   if (!limpo) return;
-  salvarNomeUsuarioLocal(limpo);
+  salvarNomeUsuarioLocal(limpo, currentUser?.uid);
   if (currentUser) {
     try {
       if (currentUser.displayName !== limpo) {
@@ -290,6 +370,7 @@ function criarGrupoPadrao(id = DEFAULT_GROUP_ID, nome = 'Grupo Principal') {
     id,
     nome,
     pessoas: [],
+    meusParticipantes: {},
     meuParticipante: null,
     gastos: [],
     taxasCambio: {}
@@ -299,21 +380,31 @@ function criarGrupoPadrao(id = DEFAULT_GROUP_ID, nome = 'Grupo Principal') {
 function normalizarEstruturaGrupo(id, raw) {
   const g = raw && typeof raw === 'object' ? raw : {};
   const pessoas = Array.isArray(g.pessoas) ? g.pessoas : [];
-  let meuParticipante = typeof g.meuParticipante === 'string' && pessoas.includes(g.meuParticipante)
-    ? g.meuParticipante
-    : (meByGroupCache[id] && pessoas.includes(meByGroupCache[id]) ? meByGroupCache[id] : null);
+  const meusParticipantes = g.meusParticipantes && typeof g.meusParticipantes === 'object'
+    ? { ...g.meusParticipantes }
+    : {};
 
-  if (!meuParticipante && currentUserName && pessoas.length > 0) {
-    const alvo = normalizarTexto(currentUserName);
-    const match = pessoas.find(p => normalizarTexto(p) === alvo);
-    if (match) meuParticipante = match;
+  // Limpa vínculos de participantes que já foram removidos do grupo
+  for (const [uidKey, boundName] of Object.entries(meusParticipantes)) {
+    if (!pessoas.includes(boundName)) {
+      delete meusParticipantes[uidKey];
+    }
+  }
+
+  const uid = currentUser?.uid || null;
+  const cacheUid = lerCacheMeDoUsuario(uid);
+  if (uid && !meusParticipantes[uid] && cacheUid[id] && pessoas.includes(cacheUid[id])) {
+    meusParticipantes[uid] = cacheUid[id];
   }
 
   return {
     id: g.id || id,
     nome: g.nome || 'Grupo',
     pessoas,
-    meuParticipante,
+    meusParticipantes,
+    meuParticipante: typeof g.meuParticipante === 'string' && pessoas.includes(g.meuParticipante)
+      ? g.meuParticipante
+      : null,
     gastos: Array.isArray(g.gastos) ? g.gastos : [],
     taxasCambio: g.taxasCambio && typeof g.taxasCambio === 'object' ? g.taxasCambio : {}
   };
@@ -365,10 +456,10 @@ async function garantirPerfilUsuarioNaNuvem(user) {
   const userRef = getUserProfileRef(user.uid);
   const snap = await getDoc(userRef);
 
-  const nomeSalvoLocal = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+  const nomeSalvoLocal = carregarNomeUsuarioLocal(user.uid);
   const nomeEfetivo = nomeSalvoLocal || user.displayName || user.email?.split('@')[0] || '';
-  if (nomeEfetivo && !currentUserName) {
-    salvarNomeUsuarioLocal(nomeEfetivo);
+  if (nomeEfetivo) {
+    salvarNomeUsuarioLocal(nomeEfetivo, user.uid);
   }
 
   if (!snap.exists()) {
@@ -385,6 +476,7 @@ async function garantirPerfilUsuarioNaNuvem(user) {
       displayName: nomeEfetivo,
       groupIds: [DEFAULT_GROUP_ID],
       activeGroupId: DEFAULT_GROUP_ID,
+      meByGroup: lerCacheMeDoUsuario(user.uid),
       updatedAt: Date.now()
     });
 
@@ -392,7 +484,8 @@ async function garantirPerfilUsuarioNaNuvem(user) {
       email: user.email || '',
       displayName: nomeEfetivo,
       groupIds: [DEFAULT_GROUP_ID],
-      activeGroupId: DEFAULT_GROUP_ID
+      activeGroupId: DEFAULT_GROUP_ID,
+      meByGroup: lerCacheMeDoUsuario(user.uid)
     };
   }
 
@@ -406,14 +499,22 @@ async function garantirPerfilUsuarioNaNuvem(user) {
 
   const nomeNuvem = data.displayName || user.displayName || nomeSalvoLocal || '';
   if (nomeNuvem) {
-    salvarNomeUsuarioLocal(nomeNuvem);
+    salvarNomeUsuarioLocal(nomeNuvem, user.uid);
   }
+
+  // Sincroniza cache local de "Eu" por grupo a partir do perfil do usuário na nuvem
+  const cacheAtual = lerCacheMeDoUsuario(user.uid);
+  const meNuvem = data.meByGroup && typeof data.meByGroup === 'object' ? data.meByGroup : {};
+  const cacheMesclado = { ...cacheAtual, ...meNuvem };
+  meByGroupCache = cacheMesclado;
+  salvarCacheMeDoUsuario(user.uid, cacheMesclado);
 
   await setDoc(userRef, {
     email: user.email || data.email || '',
     displayName: nomeNuvem || nomeEfetivo,
     groupIds,
     activeGroupId,
+    meByGroup: cacheMesclado,
     updatedAt: Date.now()
   }, { merge: true });
 
@@ -421,7 +522,8 @@ async function garantirPerfilUsuarioNaNuvem(user) {
     ...data,
     displayName: nomeNuvem || nomeEfetivo,
     groupIds,
-    activeGroupId
+    activeGroupId,
+    meByGroup: cacheMesclado
   };
 }
 
@@ -477,13 +579,18 @@ async function salvarGrupoNaNuvem(grupo) {
       id: grupo.id,
       nome: grupo.nome,
       pessoas: grupo.pessoas || [],
-      meuParticipante: grupo.meuParticipante || null,
+      meusParticipantes: grupo.meusParticipantes || {},
       gastos: grupo.gastos || [],
       taxasCambio: grupo.taxasCambio || {},
       [`members.${currentUser.uid}`]: true,
       updatedAt: Date.now(),
       updatedBy: currentUser.uid
     };
+
+    if (grupo.meusParticipantes?.[currentUser.uid]) {
+      payload[`meusParticipantes.${currentUser.uid}`] = grupo.meusParticipantes[currentUser.uid];
+    }
+
     await setDoc(groupRef, payload, { merge: true });
     cloudGroupsCache[grupo.id] = normalizarEstruturaGrupo(grupo.id, payload);
     const agora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -622,11 +729,28 @@ function assinarPerfilUsuario(uid) {
   unsubscribeUserDoc = onSnapshot(userRef, async (snap) => {
     if (!snap.exists() || isSavingCloud) return;
     const data = snap.data();
+
     if (data.displayName && data.displayName !== currentUserName) {
-      salvarNomeUsuarioLocal(data.displayName);
+      salvarNomeUsuarioLocal(data.displayName, uid);
       renderAuthUI();
       renderTudo();
     }
+
+    if (data.meByGroup && typeof data.meByGroup === 'object') {
+      const cacheAtual = lerCacheMeDoUsuario(uid);
+      const mesclado = { ...cacheAtual, ...data.meByGroup };
+      meByGroupCache = mesclado;
+      salvarCacheMeDoUsuario(uid, mesclado);
+
+      for (const [gid, nomeMe] of Object.entries(mesclado)) {
+        if (state.grupos[gid] && state.grupos[gid].pessoas.includes(nomeMe)) {
+          state.grupos[gid].meusParticipantes = state.grupos[gid].meusParticipantes || {};
+          state.grupos[gid].meusParticipantes[uid] = nomeMe;
+        }
+      }
+      renderTudo();
+    }
+
     const groupIds = Array.isArray(data.groupIds) ? data.groupIds : [];
     let mudouLista = false;
 
@@ -755,7 +879,7 @@ function initAuthListeners() {
     const nomeCadastro = authMode === 'register'
       ? (document.getElementById('auth-name')?.value?.trim() || '')
       : '';
-    if (nomeCadastro) salvarNomeUsuarioLocal(nomeCadastro);
+    if (nomeCadastro) salvarNomeUsuarioLocal(nomeCadastro, null);
 
     try {
       await aplicarPersistenciaEscolhida();
@@ -795,7 +919,7 @@ function initAuthListeners() {
       if (!isRegister) {
         await signInWithEmailAndPassword(auth, email, senha);
       } else {
-        salvarNomeUsuarioLocal(nomeCadastro);
+        salvarNomeUsuarioLocal(nomeCadastro, null);
         const cred = await createUserWithEmailAndPassword(auth, email, senha);
         if (cred.user) {
           await updateProfile(cred.user, { displayName: nomeCadastro });
@@ -815,16 +939,24 @@ function initAuthListeners() {
       unsubscribeUserDoc();
       unsubscribeUserDoc = null;
     }
+    currentUserName = '';
+    meByGroupCache = {};
     await signOut(auth);
   });
 
   onAuthStateChanged(auth, async (user) => {
     currentUser = user || null;
     if (currentUser) {
-      if (authMode === 'register') {
-        const nomeCadastro = document.getElementById('auth-name')?.value?.trim();
-        if (nomeCadastro) salvarNomeUsuarioLocal(nomeCadastro);
+      const nomeCadastro = authMode === 'register'
+        ? (document.getElementById('auth-name')?.value?.trim() || '')
+        : '';
+      currentUserName = nomeCadastro || carregarNomeUsuarioLocal(currentUser.uid);
+      meByGroupCache = lerCacheMeDoUsuario(currentUser.uid);
+
+      if (nomeCadastro) {
+        salvarNomeUsuarioLocal(nomeCadastro, currentUser.uid);
       }
+
       renderAuthUI();
       setSaveStatus('statusConnecting');
       try {
@@ -835,12 +967,16 @@ function initAuthListeners() {
         if (currentUserName) {
           await persistirNomeNoPerfil(currentUserName);
         }
+        renderAuthUI();
+        renderTudo();
       } catch (e) {
         console.error('Erro ao inicializar dados do usuário:', e);
         setSaveStatus('statusOffline');
         renderTudo();
       }
     } else {
+      currentUserName = '';
+      meByGroupCache = {};
       renderAuthUI();
       setSaveStatus('statusOffline');
     }
@@ -954,7 +1090,9 @@ async function criarNovoGrupo() {
   const nomeUsuario = getNomeUsuarioEfetivo();
   if (nomeUsuario) {
     novoGrupo.pessoas.push(nomeUsuario);
-    setMeParticipantName(novoGrupo, nomeUsuario);
+    if (currentUser) {
+      novoGrupo.meusParticipantes[currentUser.uid] = nomeUsuario;
+    }
   }
 
   state.grupos[id] = novoGrupo;
@@ -962,6 +1100,9 @@ async function criarNovoGrupo() {
   filtroCategoriaAtual = 'todas';
   cancelarEdicao();
   await salvarGrupoNaNuvem(novoGrupo);
+  if (nomeUsuario) {
+    await setMeParticipantName(novoGrupo, nomeUsuario);
+  }
   if (currentUser) {
     await vincularGrupoAoUsuario(currentUser.uid, id, true);
   }
@@ -1096,8 +1237,7 @@ async function adicionarParticipante(nomeRaw, marcarComoEu = false) {
 
   if (existente) {
     if (marcarComoEu) {
-      setMeParticipantName(grupo, existente);
-      await salvarGrupoNaNuvem(grupo);
+      await setMeParticipantName(grupo, existente);
       renderTudo();
       return true;
     }
@@ -1106,11 +1246,11 @@ async function adicionarParticipante(nomeRaw, marcarComoEu = false) {
   }
 
   grupo.pessoas.push(nome);
+  await salvarGrupoNaNuvem(grupo);
   if (marcarComoEu) {
-    setMeParticipantName(grupo, nome);
+    await setMeParticipantName(grupo, nome);
     await persistirNomeNoPerfil(nome);
   }
-  await salvarGrupoNaNuvem(grupo);
   renderTudo();
   return true;
 }
@@ -1133,8 +1273,7 @@ async function acionarBotaoEu() {
 
   const existente = grupo.pessoas.find(p => normalizarTexto(p) === normalizarTexto(nomeAlvo));
   if (existente) {
-    setMeParticipantName(grupo, existente);
-    await salvarGrupoNaNuvem(grupo);
+    await setMeParticipantName(grupo, existente);
     renderTudo();
     return;
   }
@@ -1159,6 +1298,13 @@ async function removerParticipante(nome) {
   grupo.pessoas = grupo.pessoas.filter(p => p !== nome);
   if (grupo.meuParticipante === nome) {
     grupo.meuParticipante = null;
+  }
+  if (grupo.meusParticipantes && typeof grupo.meusParticipantes === 'object') {
+    for (const [uidKey, boundName] of Object.entries(grupo.meusParticipantes)) {
+      if (boundName === nome) {
+        delete grupo.meusParticipantes[uidKey];
+      }
+    }
   }
   await salvarGrupoNaNuvem(grupo);
   renderTudo();
@@ -2430,7 +2576,15 @@ function exportarBackupJSON() {
     userName: currentUserName,
     state
   };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `splitrao-backup-${getTodayISO()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
+
 async function importarBackupJSON(file) {
   if (!file) return;
   try {
