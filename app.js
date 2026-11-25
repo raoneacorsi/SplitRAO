@@ -2875,31 +2875,26 @@ function renderResumoGlobalUsuario() {
 
   banner.classList.remove('hidden', 'positivo', 'negativo', 'neutro', 'resumo-devo', 'resumo-receber', 'resumo-quitado');
 
-  let badgeText = '';
   let fraseHTML = '';
 
   if (saldoTotal > 0.01) {
     const valorFmt = formatMoney(saldoTotal, 'BRL');
     banner.classList.add('positivo', 'resumo-receber');
-    badgeText = t('badgeReceber');
     fraseHTML = t('myBalanceReceiveTotal', {
       val: `<strong class="resumo-valor">${escapeHTML(valorFmt)}</strong>`
     });
   } else if (saldoTotal < -0.01) {
     const valorFmt = formatMoney(Math.abs(saldoTotal), 'BRL');
     banner.classList.add('negativo', 'resumo-devo');
-    badgeText = t('badgePagar');
     fraseHTML = t('myBalancePayTotal', {
       val: `<strong class="resumo-valor">${escapeHTML(valorFmt)}</strong>`
     });
   } else {
     banner.classList.add('neutro', 'resumo-quitado');
-    badgeText = t('badgeQuitado');
     fraseHTML = escapeHTML(t('myBalanceZero'));
   }
 
   banner.innerHTML = `
-    <span id="global-user-badge" class="resumo-badge">${escapeHTML(badgeText)}</span>
     <p id="global-user-texto" class="resumo-texto">${fraseHTML}</p>
   `;
 }
