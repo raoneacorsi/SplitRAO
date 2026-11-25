@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RAODEV • Conversor CSV para SplitRAO</title>
+  <style>
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+    body {
+      background: #f0f9ff;
+      color: #0f172a;
+      display: flex;
+      justify-content: center;
+      padding: 40px 16px;
+    }
+    .box {
+      background: #fff;
+      border: 1px solid #bae6fd;
+      border-radius: 16px;
+      padding: 28px;
+      width: 100%;
+      max-width: 480px;
+      box-shadow: 0 10px 25px rgba(2, 132, 199, 0.08);
+    }
+    .top-link {
+      display: inline-block;
+      margin-bottom: 12px;
+      font-size: 0.85rem;
+      color: #0284c7;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .top-link:hover { text-decoration: underline; }
+    h1 { font-size: 1.4rem; color: #0369a1; margin-top: 0; margin-bottom: 6px; }
+    p { color: #64748b; font-size: 0.9rem; margin-top: 0; }
+    .upload-area {
+      border: 2px dashed #7dd3fc;
+      border-radius: 12px;
+      padding: 28px;
+      text-align: center;
+      cursor: pointer;
+      background: #f8fafc;
+      margin: 20px 0;
+      transition: 0.2s;
+    }
+    .upload-area:hover { background: #e0f2fe; border-color: #0284c7; }
+    .field { margin-bottom: 12px; }
+    label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 4px; color: #334155; }
+    input[type="text"] {
+      width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px;
+      font-size: 0.95rem;
+    }
+    input[type="text"]:focus {
+      outline: none; border-color: #0284c7; box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+    }
+    .participantes-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 14px;
+      margin: 16px 0;
+    }
+    .participantes-box h3 {
+      margin: 0 0 10px 0;
+      font-size: 0.9rem;
+      color: #0369a1;
+    }
+    .acoes-botoes {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    button {
+      width: 100%; padding: 12px; background: #0284c7; color: #fff;
+      border: none; border-radius: 10px; font-weight: 600; font-size: 0.95rem; cursor: pointer;
+      transition: 0.2s;
+    }
+    button:hover { background: #0369a1; }
+    button.btn-secundario {
+      background: #e0f2fe;
+      color: #0369a1;
+    }
+    button.btn-secundario:hover {
+      background: #bae6fd;
+    }
+    .hidden { display: none; }
+    .status {
+      background: #dcfce7; color: #166534; padding: 12px;
+      border-radius: 8px; font-size: 0.85rem; margin-bottom: 14px;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <a href="index.html" class="top-link">← Voltar ao SplitRAO</a>
+    <h1>🔄 Conversor Splitwise ➔ SplitRAO</h1>
+    <p>Selecione a planilha CSV exportada do Splitwise para enviar o grupo direto para sua conta.</p>
+
+    <!-- Etapa 1: Entrada do CSV -->
+    <div class="upload-area" id="dropzone">
+      <strong>📂 Clique para escolher o arquivo .CSV</strong>
+      <input type="file" id="csv-input" accept=".csv" hidden>
+    </div>
+
+    <!-- Etapa 2: Ajustes e Envio -->
+    <div id="painel-config" class="hidden">
+      <div class="field">
+        <label for="grupo-nome">Nome do Grupo</label>
+        <input type="text" id="grupo-nome" value="Grupo Importado">
+      </div>
+
+      <div class="participantes-box">
+        <h3>👥 Participantes do Grupo (edite se necessário)</h3>
+        <div id="mapeamento-nomes"></div>
+      </div>
+
+      <div id="resumo" class="status"></div>
+
+      <div class="acoes-botoes">
+        <button type="button" id="btn-enviar-app">🚀 Importar direto para o SplitRAO</button>
+        <button type="button" id="btn-baixar" class="btn-secundario">💾 Apenas baixar JSON</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SPLITWISE_IMPORT_KEY = 'raodev_splitwise_pending_import';
+
+    function normalizarTexto(texto) {
+      return (texto || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+    }
+
+    function mapearCategoria(categoriaRaw, descricaoRaw) {
+      const cat = normalizarTexto(categoriaRaw);
+      const desc = normalizarTexto(descricaoRaw);
+
+      const regrasCategoria = {
+        'Comida': ['mercado', 'supermercado', 'jantar fora', 'restaurante', 'mantimentos', 'bebidas', 'comida', 'alimentos', 'lanche', 'groceries', 'dining out', 'food', 'liquor'],
+        'Casa': ['manutencao', 'agua', 'eletricidade', 'luz', 'aluguel', 'limpeza', 'tv/telefone/internet', 'internet', 'telefone', 'impostos', 'servicos', 'moveis', 'eletronicos', 'suprimentos', 'casa', 'rent', 'utilities', 'household', 'maintenance', 'electronics', 'furniture'],
+        'Carro': ['combustivel', 'gasolina', 'carro', 'estacionamento', 'seguro', 'pedagio', 'mecanico', 'car', 'gas/fuel', 'parking', 'insurance'],
+        'Transporte': ['taxi', 'uber', '99', 'onibus/trem', 'onibus', 'trem', 'metro', 'hotel', 'hospedagem', 'airbnb', 'aviao', 'passagem', 'voo', 'transporte', 'bicicleta', 'bus/train', 'plane', 'transportation', 'bicycle'],
+        'Entretenimento': ['esportes', 'filmes', 'cinema', 'musica', 'jogos', 'entretenimento', 'lazer', 'show', 'bar', 'festa', 'viagem', 'entertainment', 'games', 'movies', 'music', 'sports'],
+        'Vida': ['despesas medicas', 'medico', 'farmacia', 'saude', 'vestuario', 'roupa', 'presentes', 'educacao', 'cuidados pessoais', 'pets', 'animais', 'geral', 'outros', 'vida', 'medical', 'clothing', 'gifts', 'education', 'general', 'life']
+      };
+
+      for (const [categoriaDestino, termos] of Object.entries(regrasCategoria)) {
+        if (termos.some(t => cat === t || cat.includes(t))) {
+          if (cat === 'geral' || cat === 'general') break;
+          return categoriaDestino;
+        }
+      }
+
+      const regrasDescricao = [
+        { cat: 'Comida', palavras: ['ifood', 'rappi', 'mercado', 'acougue', 'padaria', 'almoco', 'jantar', 'cafe', 'pizza', 'hamburguer', 'sushi', 'cerveja', 'bebida', 'agua mineral', 'lanche', 'sorvete', 'acai', 'hortifruti', 'feira', 'restaurante', 'churrasco'] },
+        { cat: 'Carro', palavras: ['posto', 'gasolina', 'etanol', 'diesel', 'estacionamento', 'pedagio', 'ipva', 'oficina', 'oleo', 'pneu', 'lava jato'] },
+        { cat: 'Transporte', palavras: ['uber', '99', 'taxi', 'passagem', 'onibus', 'metro', 'voo', 'latam', 'gol', 'azul', 'airbnb', 'hotel', 'pousada', 'hostel', 'balsa', 'pedagio'] },
+        { cat: 'Casa', palavras: ['aluguel', 'condominio', 'luz', 'enel', 'light', 'copel', 'cemig', 'agua', 'sabesp', 'cedae', 'internet', 'vivo', 'claro', 'tim', 'gas', 'faxina', 'diarista', 'iptu'] },
+        { cat: 'Entretenimento', palavras: ['cinema', 'ingresso', 'show', 'teatro', 'spotify', 'netflix', 'prime', 'disney', 'jogo', 'futebol', 'bar', 'balada', 'passeio', 'trilha', 'parque'] }
+      ];
+
+      for (const regra of regrasDescricao) {
+        if (regra.palavras.some(p => desc.includes(p))) {
+          return regra.cat;
+        }
+      }
+
+      return 'Vida';
+    }
+
+    const dropzone = document.getElementById('dropzone');
+    const csvInput = document.getElementById('csv-input');
+    const painelConfig = document.getElementById('painel-config');
+    const grupoNomeInput = document.getElementById('grupo-nome');
+    const mapeamentoNomesDiv = document.getElementById('mapeamento-nomes');
+    const resumoDiv = document.getElementById('resumo');
+    const btnEnviarApp = document.getElementById('btn-enviar-app');
+    const btnBaixar = document.getElementById('btn-baixar');
+
+    let dadosExtraidos = null;
+
+    function quebrarLinhaCSV(linha) {
+      const colunas = [];
+      let textoAtual = '';
+      let entreAspas = false;
+
+      for (const char of linha) {
+        if (char === '"') {
+          entreAspas = !entreAspas;
+        } else if (char === ',' && !entreAspas) {
+          colunas.push(textoAtual.trim());
+          textoAtual = '';
+        } else {
+          textoAtual += char;
+        }
+      }
+      colunas.push(textoAtual.trim());
+      return colunas;
+    }
+
+    function lerCSV(conteudoTexto, nomeArquivo) {
+      const linhas = conteudoTexto.split(/\r?\n/).filter(l => l.trim() !== '');
+      if (linhas.length < 2) return alert('Arquivo CSV vazio.');
+
+      const cabecalho = quebrarLinhaCSV(linhas[0]);
+      const pessoas = cabecalho.slice(5);
+      const lancamentos = [];
+      const contagemCategorias = {};
+
+      for (let i = 1; i < linhas.length; i++) {
+        const cols = quebrarLinhaCSV(linhas[i]);
+        if (cols.length < 6) continue;
+
+        const [dataIso, descricao, categoriaRaw, custoStr] = cols;
+        const valor = parseFloat(custoStr);
+
+        if (!descricao || descricao.toLowerCase().includes('saldo total') || descricao.toLowerCase().includes('total balance') || isNaN(valor)) continue;
+
+        const [ano, mes, dia] = dataIso.split('-');
+        const dataBr = (ano && mes && dia) ? `${dia}/${mes}/${ano}` : dataIso;
+
+        const saldos = {};
+        pessoas.forEach((p, idx) => {
+          saldos[p] = Math.round((parseFloat(cols[5 + idx]) || 0) * 100) / 100;
+        });
+
+        const quemRecebe = pessoas.filter(p => saldos[p] > 0.005);
+        const quemDeve = pessoas.filter(p => saldos[p] < -0.005);
+
+        const ehPagamento = normalizarTexto(categoriaRaw).includes('pagamento') ||
+          normalizarTexto(categoriaRaw).includes('payment') ||
+          (quemRecebe.length === 1 && quemDeve.length === 1 && Math.abs(saldos[quemRecebe[0]] - valor) < 0.02);
+
+        if (ehPagamento && quemRecebe.length === 1 && quemDeve.length === 1) {
+          lancamentos.push({
+            id: `pgt_${Date.now()}_${i}`,
+            tipo: 'pagamento',
+            data: dataBr,
+            descricao,
+            valor,
+            deOrig: quemDeve[0],
+            paraOrig: quemRecebe[0]
+          });
+          continue;
+        }
+
+        const pagador = quemRecebe[0] || pessoas[pessoas.length - 1];
+        const divisao = {};
+        const participantes = [];
+
+        quemDeve.forEach(p => {
+          divisao[p] = Math.abs(saldos[p]);
+          participantes.push(p);
+        });
+
+        const parteDoPagador = Math.round((valor - (saldos[pagador] || 0)) * 100) / 100;
+        if (parteDoPagador > 0.005) {
+          divisao[pagador] = parteDoPagador;
+          participantes.unshift(pagador);
+        }
+
+        const categoriaFinal = mapearCategoria(categoriaRaw, descricao);
+        contagemCategorias[categoriaFinal] = (contagemCategorias[categoriaFinal] || 0) + 1;
+
+        lancamentos.push({
+          id: `gst_${Date.now()}_${i}`,
+          tipo: 'despesa',
+          data: dataBr,
+          descricao,
+          categoria: categoriaFinal,
+          valor,
+          pagadorOrig: pagador,
+          modoDivisao: 'exato',
+          participantesOrig: participantes,
+          divisaoOrig: divisao
+        });
+      }
+
+      dadosExtraidos = { pessoas, lancamentos };
+
+      grupoNomeInput.value = nomeArquivo
+        .replace(/\.csv$/i, '')
+        .replace(/Exportação do Splitwise para /i, '')
+        .replace(/Splitwise export for /i, '');
+
+      mapeamentoNomesDiv.innerHTML = pessoas.map(p => `
+        <div class="field">
+          <label>Original: <em>${p}</em></label>
+          <input type="text" class="apelido-input" data-orig="${p}" value="${p.split(' ')[0]}" placeholder="Digite o nome desejado">
+        </div>
+      `).join('');
+
+      const resumoCats = Object.entries(contagemCategorias)
+        .map(([cat, qtd]) => `${cat}: ${qtd}`)
+        .join(' • ');
+
+      resumoDiv.innerHTML = `
+        <strong>✅ ${lancamentos.length} lançamentos prontos!</strong><br>
+        <small>${resumoCats || 'Apenas pagamentos identificados'}</small>
+      `;
+      painelConfig.classList.remove('hidden');
+    }
+
+    function montarEstruturaSplitRAO() {
+      const mapaApelidos = {};
+      document.querySelectorAll('.apelido-input').forEach(inp => {
+        mapaApelidos[inp.dataset.orig] = inp.value.trim() || inp.dataset.orig;
+      });
+
+      const grupoId = 'grp_' + Date.now();
+      const nomeGrupo = grupoNomeInput.value.trim() || 'Importado';
+      const pessoasMapeadas = dadosExtraidos.pessoas.map(p => mapaApelidos[p]);
+
+      const gastosMapeados = dadosExtraidos.lancamentos.map(item => {
+        if (item.tipo === 'pagamento') {
+          const deNome = mapaApelidos[item.deOrig] || item.deOrig;
+          const paraNome = mapaApelidos[item.paraOrig] || item.paraOrig;
+          return {
+            id: item.id,
+            tipo: 'pagamento',
+            data: item.data,
+            descricao: item.descricao,
+            valor: item.valor,
+            moeda: 'BRL',
+            taxaCambio: 1,
+            valorBRL: item.valor,
+            de: deNome,
+            para: paraNome
+          };
+        }
+
+        const novaDivisao = {};
+        for (const [pessoa, val] of Object.entries(item.divisaoOrig || {})) {
+          const nomePessoa = mapaApelidos[pessoa] || pessoa;
+          novaDivisao[nomePessoa] = val;
+        }
+
+        return {
+          id: item.id,
+          tipo: 'despesa',
+          data: item.data,
+          descricao: item.descricao,
+          categoria: item.categoria || '',
+          valor: item.valor,
+          moeda: 'BRL',
+          taxaCambio: 1,
+          valorBRL: item.valor,
+          pagador: mapaApelidos[item.pagadorOrig] || item.pagadorOrig,
+          modoDivisao: item.modoDivisao || 'exato',
+          participantes: (item.participantesOrig || []).map(p => mapaApelidos[p] || p),
+          divisao: novaDivisao
+        };
+      });
+
+      return {
+        grupoAtivoId: grupoId,
+        grupos: {
+          [grupoId]: {
+            id: grupoId,
+            nome: nomeGrupo,
+            pessoas: pessoasMapeadas,
+            gastos: gastosMapeados
+          }
+        }
+      };
+    }
+
+    dropzone.addEventListener('click', () => csvInput.click());
+    csvInput.addEventListener('change', (e) => {
+      const arquivo = e.target.files[0];
+      if (!arquivo) return;
+      const leitor = new FileReader();
+      leitor.onload = (ev) => lerCSV(ev.target.result, arquivo.name);
+      leitor.readAsText(arquivo, 'UTF-8');
+    });
+
+    btnEnviarApp.addEventListener('click', () => {
+      if (!dadosExtraidos) return;
+      const estruturaFinal = montarEstruturaSplitRAO();
+      localStorage.setItem(SPLITWISE_IMPORT_KEY, JSON.stringify(estruturaFinal));
+      window.location.href = 'index.html';
+    });
+
+    btnBaixar.addEventListener('click', () => {
+      if (!dadosExtraidos) return;
+      const estruturaFinal = montarEstruturaSplitRAO();
+      const blob = new Blob([JSON.stringify(estruturaFinal, null, 2)], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `${(grupoNomeInput.value.trim() || 'grupo-importado').toLowerCase().replace(/\s+/g, '-')}.json`;
+      link.click();
+    });
+  </script>
+</body>
+</html>

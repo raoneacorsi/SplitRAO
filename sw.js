@@ -2,7 +2,7 @@ const CACHE_NAME = 'splitrao-v1';
 const ASSETS = [
   './',
   './index.html',
-  './Conversor.html',
+  './conversor.html',
   './style.css',
   './app.js?v=8',
   './i18n.js',

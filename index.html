@@ -11,6 +11,7 @@
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0284c7">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="SplitRAO">
   <link rel="apple-touch-icon" href="icon-192.png">
@@ -87,7 +88,7 @@
         <p class="app-subtitle" data-i18n="appSubtitle">Divisão inteligente de despesas em tempo real</p>
       </header>
 
-<!-- Resumo Global do Usuário acima do grupo -->
+      <!-- Resumo Global do Usuário acima do grupo -->
       <div id="global-user-banner" class="global-user-banner hidden"></div>
 
       <!-- Cartão Principal do Grupo em Destaque + Menu de 3 Tracinhos -->
@@ -131,12 +132,12 @@
                 <span data-i18n="backupBtn">Backup</span>
               </button>
               <button type="button" id="btn-importar-splitwise" class="dropdown-item">
-              <span>📥</span>
-              <span data-i18n="importSplitwiseBtn">Importar do Splitwise</span>
+                <span>📥</span>
+                <span data-i18n="importSplitwiseBtn">Importar do Splitwise</span>
               </button>
               <button type="button" id="btn-instalar-app" class="dropdown-item hidden">
-              <span>📲</span>
-              <span>Instalar aplicativo</span>
+                <span>📲</span>
+                <span>Instalar aplicativo</span>
               </button>
               <label for="input-importar-json" class="dropdown-item">
                 <span>📂</span>
@@ -200,6 +201,7 @@
           <div class="filter-bar">
             <label for="filtro-categoria" data-i18n="filterLabel">Filtrar:</label>
             <select id="filtro-categoria" class="select-sm"></select>
+            <select id="filtro-participante" class="select-sm" aria-label="Filtrar por participante"></select>
             <button type="button" id="btn-toggle-totais" class="btn-secondary-sm" data-i18n="totalsBtn">📊 Totais</button>
           </div>
 
@@ -227,7 +229,6 @@
     <div id="modal-form-gasto" class="modal-gasto-overlay hidden">
       <div class="modal-gasto-box">
         <section class="card" id="card-form-gasto">
-          
 
           <div id="container-form-gasto" class="hidden">
             <div class="card-header-between" style="margin-bottom: 16px;">
@@ -512,6 +513,12 @@
         <button type="submit" id="btn-submit-auth" class="btn-primary" data-i18n="authSubmitLoginBtn">Entrar na Conta</button>
       </form>
     </div>
+  </div>
+
+      <!-- Toast de Desfazer Exclusão -->
+   <div id="toast-undo" class="toast-undo hidden" role="status" aria-live="polite">
+    <span id="toast-undo-msg"></span>
+    <button type="button" id="btn-toast-undo" class="toast-undo-btn" data-i18n="undoBtn">Desfazer</button>
   </div>
 
   <script type="module" src="app.js?v=8"></script>

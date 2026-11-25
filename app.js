@@ -127,6 +127,7 @@ let historicoAberto = false;
 let formGastoAberto = false;
 let menu3DotsAberto = false;
 let dataGastoSelecionada = '';
+let undoPendente = null; // { groupId, item, index, timerId }
 
 // ==================== UTILITÁRIOS DE IDENTIDADE ("EU") ====================
 function salvarNomeUsuarioLocal(nome) {
@@ -1868,20 +1869,85 @@ function iniciarEdicaoGasto(gastoId) {
   document.getElementById('card-form-gasto')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+function esconderToastUndo() {
+  const toast = document.getElementById('toast-undo');
+  toast?.classList.add('hidden');
+}
+
+async function confirmarExclusaoPendente() {
+  if (!undoPendente) return;
+  const pendente = undoPendente;
+  clearTimeout(pendente.timerId);
+  undoPendente = null;
+  esconderToastUndo();
+
+  const grupo = state.grupos[pendente.groupId];
+  if (grupo) {
+    await salvarGrupoNaNuvem(grupo);
+  }
+}
+
+async function desfazerExclusaoLancamento() {
+  if (!undoPendente) return;
+  const pendente = undoPendente;
+  clearTimeout(pendente.timerId);
+  undoPendente = null;
+  esconderToastUndo();
+
+  const grupo = state.grupos[pendente.groupId];
+  if (!grupo) return;
+
+  const jaExiste = grupo.gastos.some(g => g.id === pendente.item.id);
+  if (!jaExiste) {
+    const idx = Math.min(Math.max(0, pendente.index), grupo.gastos.length);
+    grupo.gastos.splice(idx, 0, pendente.item);
+  }
+
+  await salvarGrupoNaNuvem(grupo);
+  if (state.grupoAtivoId === pendente.groupId) {
+    renderTudo();
+  }
+}
+
 async function apagarLancamento(id) {
   const grupo = getGrupoAtivo();
-  const item = grupo.gastos.find(g => g.id === id);
-  if (!item) return;
+  const idx = grupo.gastos.findIndex(g => g.id === id);
+  if (idx < 0) return;
 
-  const valFmt = formatMoney(getValorEmBRL(item), 'BRL');
-  const msg = item.tipo === 'pagamento'
-    ? t('confirmDeletePayment', { from: item.de, to: item.para, val: valFmt })
-    : t('confirmDeleteExpense', { desc: item.descricao, val: valFmt });
+  if (undoPendente) {
+    await confirmarExclusaoPendente();
+  }
 
-  if (!confirm(msg)) return;
-  grupo.gastos = grupo.gastos.filter(g => g.id !== id);
-  await salvarGrupoNaNuvem(grupo);
+  const [itemRemovido] = grupo.gastos.splice(idx, 1);
+  salvarEstadoLocal();
   renderTudo();
+
+  const labelItem = itemRemovido.tipo === 'pagamento'
+    ? `${itemRemovido.de || '?'} → ${itemRemovido.para || '?'}`
+    : (itemRemovido.descricao || 'Lançamento');
+
+  const toast = document.getElementById('toast-undo');
+  const msgEl = document.getElementById('toast-undo-msg');
+  if (msgEl) msgEl.textContent = t('deletedToastMsg', { item: labelItem });
+  toast?.classList.remove('hidden');
+
+  const groupId = grupo.id;
+  const timerId = setTimeout(async () => {
+    if (!undoPendente || undoPendente.item.id !== itemRemovido.id) return;
+    undoPendente = null;
+    esconderToastUndo();
+    const gAlvo = state.grupos[groupId];
+    if (gAlvo) {
+      await salvarGrupoNaNuvem(gAlvo);
+    }
+  }, 6000);
+
+  undoPendente = {
+    groupId,
+    item: itemRemovido,
+    index: idx,
+    timerId
+  };
 }
 
 // ==================== CÁLCULO DE SALDOS E ACERTOS ====================
@@ -2719,6 +2785,9 @@ async function processarImportacaoPendenteSplitwise() {
 }
 async function importarBackupJSON(file) {
   if (!file) return;
+  isSavingCloud = true;
+  setSaveStatus('statusSaving');
+
   try {
     const text = await file.text();
     const parsed = JSON.parse(text);
@@ -2734,9 +2803,8 @@ async function importarBackupJSON(file) {
         ? gdata.id.trim()
         : (typeof chaveOriginal === 'string' && chaveOriginal.trim() ? chaveOriginal.trim() : gerarId('grp'));
 
-      const gid = (state.grupos[idCandidato] && state.grupos[idCandidato].nome !== gdata.nome)
-        ? gerarId('grp')
-        : idCandidato;
+      // Se já existe um grupo com esse ID, gera um novo para nunca sobrescrever
+      const gid = state.grupos[idCandidato] ? gerarId('grp') : idCandidato;
 
       const norm = normalizarEstruturaGrupo(gid, { ...gdata, id: gid });
       state.grupos[gid] = norm;
@@ -2772,12 +2840,18 @@ async function importarBackupJSON(file) {
       salvarEstadoLocal();
       if (currentUser) {
         assinarGrupoAtivo(primeiroIdNovo);
+        const agora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        setSaveStatus('statusSyncedAt', { time: agora });
       }
       renderTudo();
     }
   } catch (e) {
     console.error('Erro ao importar JSON:', e);
     setSaveStatus('statusSaveError');
+  } finally {
+    setTimeout(() => {
+      isSavingCloud = false;
+    }, 300);
   }
 }
 
@@ -2863,6 +2937,9 @@ function initListeners() {
   document.getElementById('select-grupo')?.addEventListener('change', (e) => trocarGrupoAtivo(e.target.value));
   document.getElementById('btn-novo-grupo')?.addEventListener('click', criarNovoGrupo);
   document.getElementById('btn-renomear-grupo')?.addEventListener('click', renomearGrupoAtual);
+  document.getElementById('btn-toast-undo')?.addEventListener('click', () => {
+    desfazerExclusaoLancamento();
+  });
   document.getElementById('btn-importar-splitwise')?.addEventListener('click', () => {
     setMenu3DotsAberto(false);
     window.location.href = 'conversor.html';
