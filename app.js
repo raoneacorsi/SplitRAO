@@ -1002,6 +1002,7 @@ function initAuthListeners() {
         await carregarGruposDoUsuario(userData);
         assinarPerfilUsuario(currentUser.uid);
         await processarConviteDaURL();
+        await processarImportacaoPendenteSplitwise();
         if (currentUserName) {
           await persistirNomeNoPerfil(currentUserName);
         }
@@ -2658,7 +2659,64 @@ function exportarBackupJSON() {
   a.click();
   URL.revokeObjectURL(url);
 }
+const SPLITWISE_IMPORT_KEY = 'raodev_splitwise_pending_import';
 
+async function processarImportacaoPendenteSplitwise() {
+  const raw = localStorage.getItem(SPLITWISE_IMPORT_KEY);
+  if (!raw) return;
+
+  localStorage.removeItem(SPLITWISE_IMPORT_KEY);
+
+  try {
+    const parsed = JSON.parse(raw);
+    const gruposFonte = parsed?.state?.grupos || parsed?.grupos;
+    if (!gruposFonte || typeof gruposFonte !== 'object') return;
+
+    let ultimoIdImportado = null;
+
+    for (const [chaveOriginal, gdata] of Object.entries(gruposFonte)) {
+      if (!gdata || typeof gdata !== 'object') continue;
+      const gid = gerarId('grp');
+      const norm = normalizarEstruturaGrupo(gid, { ...gdata, id: gid });
+
+      state.grupos[gid] = norm;
+      cloudGroupsCache[gid] = norm;
+      ultimoIdImportado = gid;
+
+      if (currentUser) {
+        await setDoc(getGroupDocRef(gid), {
+          id: norm.id,
+          nome: norm.nome,
+          pessoas: norm.pessoas || [],
+          participantesSemApp: norm.participantesSemApp || [],
+          meuParticipante: norm.meuParticipante || null,
+          gastos: norm.gastos || [],
+          taxasCambio: norm.taxasCambio || {},
+          deleted: false,
+          [`members.${currentUser.uid}`]: true,
+          updatedAt: Date.now(),
+          updatedBy: currentUser.uid
+        }, { merge: true });
+
+        await vincularGrupoAoUsuario(currentUser.uid, gid, true);
+      } else {
+        await salvarGrupoNaNuvem(norm);
+      }
+    }
+
+    if (ultimoIdImportado) {
+      state.grupoAtivoId = ultimoIdImportado;
+      filtroCategoriaAtual = 'todas';
+      cancelarEdicao();
+      salvarEstadoLocal();
+      if (currentUser) assinarGrupoAtivo(ultimoIdImportado);
+      renderTudo();
+    }
+  } catch (e) {
+    console.error('Erro ao importar grupo do Splitwise:', e);
+    setSaveStatus('statusSaveError');
+  }
+}
 async function importarBackupJSON(file) {
   if (!file) return;
   try {
@@ -2805,7 +2863,10 @@ function initListeners() {
   document.getElementById('select-grupo')?.addEventListener('change', (e) => trocarGrupoAtivo(e.target.value));
   document.getElementById('btn-novo-grupo')?.addEventListener('click', criarNovoGrupo);
   document.getElementById('btn-renomear-grupo')?.addEventListener('click', renomearGrupoAtual);
-
+  document.getElementById('btn-importar-splitwise')?.addEventListener('click', () => {
+    setMenu3DotsAberto(false);
+    window.location.href = 'conversor.html';
+  });
   document.getElementById('btn-fab-novo-gasto')?.addEventListener('click', () => {
     if (typeof cancelarEdicao === 'function') cancelarEdicao();
     setFormGastoVisivel(true);
