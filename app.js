@@ -1048,13 +1048,6 @@ function aplicarIdiomaNaInterface() {
   atualizarSeletorMoedaUI();
 
   const btnSubmitGasto = document.getElementById('btn-submit-gasto');
-  const btnAddPessoaConfirm = document.querySelector('#form-pessoa button[type="submit"]');
-if (btnAddPessoaConfirm) {
-  btnAddPessoaConfirm.textContent =
-    currentLang === 'en' ? 'Add' :
-    currentLang === 'es' ? 'Añadir' :
-    'Adicionar';
-}
   const editIdAtual = document.getElementById('edit-gasto-id')?.value || '';
   if (btnSubmitGasto) {
     btnSubmitGasto.textContent = editIdAtual ? t('updateExpenseBtn') : t('saveExpenseBtn');
@@ -2253,6 +2246,31 @@ function renderHistorico() {
   });
 }
 
+function formatarMesAnoCurto(mesIso) {
+  if (!mesIso || mesIso === 'sem-data' || mesIso === (t('noDateLabel') || 'Sem data')) {
+    return t('noDateLabel') || 'Sem data';
+  }
+
+  const partes = String(mesIso).trim().split('-');
+  if (partes.length < 2) return String(mesIso);
+
+  const ano = Number(partes[0]);
+  const mesIdx = Number(partes[1]) - 1;
+  if (!Number.isFinite(ano) || mesIdx < 0 || mesIdx > 11) {
+    return String(mesIso);
+  }
+
+  const locale = currentLang === 'en' ? 'en-US' : (currentLang === 'es' ? 'es-ES' : 'pt-BR');
+  const nomeMes = new Date(Date.UTC(ano, mesIdx, 1)).toLocaleDateString(locale, {
+    month: 'long',
+    timeZone: 'UTC'
+  });
+
+  const mesCapitalizado = nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1);
+  const anoDoisDigitos = String(ano).slice(-2);
+  return `${mesCapitalizado}/${anoDoisDigitos}`;
+}
+
 function renderPainelTotais() {
   const painel = document.getElementById('painel-totais');
   const conteudo = document.getElementById('totais-conteudo');
@@ -2292,7 +2310,8 @@ function renderPainelTotais() {
     const catKey = g.categoria || 'Sem categoria';
     porCat[catKey] = (porCat[catKey] || 0) + val;
 
-    const mesKey = g.data && g.data.length >= 7 ? g.data.slice(0, 7) : t('noDateLabel');
+    const dataIso = normalizarDataISOOrdenacao(g.data);
+    const mesKey = dataIso && dataIso !== '0000-00-00' ? dataIso.slice(0, 7) : 'sem-data';
     porMes[mesKey] = (porMes[mesKey] || 0) + val;
   });
 
@@ -2316,11 +2335,12 @@ function renderPainelTotais() {
     .sort((a, b) => b[0].localeCompare(a[0]))
     .map(([mes, val]) => {
       const pct = totalFiltro > 0 ? Math.round((val / totalFiltro) * 100) : 0;
+      const rotuloMes = formatarMesAnoCurto(mes);
       return `
         <div class="total-row-item">
           <div class="total-row-top">
-            <span class="total-row-label"><span>${escapeHTML(mes)}</span></span>
-            <strong>${escapeHTML(formatMoney(val, 'BRL'))}</strong>
+            <span class="total-row-label"><span>${escapeHTML(rotuloMes)}</span></span>
+            <strong>${escapeHTML(formatMoney(val, 'BRL'))} (${pct}%)</strong>
           </div>
           <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
         </div>
@@ -2703,7 +2723,6 @@ async function importarBackupJSON(file) {
   }
 }
 
-// ==================== RENDERIZAÇÃO GERAL ====================
 // ==================== RENDERIZAÇÃO GERAL ====================
 function renderResumoGlobalUsuario() {
   const banner = document.getElementById('global-user-banner');

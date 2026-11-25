@@ -1948,3 +1948,19 @@ button {
   margin-top: 4px;
   margin-bottom: 8px;
 }
+
+.historico-mes-header {
+  list-style: none;
+  margin: 12px 0 6px;
+  padding: 4px 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #334155;
+  background: #f1f5f9;
+  border-left: 3px solid #0284c7;
+  border-radius: 4px;
+}
+
+.historico-mes-header:first-child {
+  margin-top: 2px;
+}
