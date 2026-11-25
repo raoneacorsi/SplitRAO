@@ -1816,3 +1816,135 @@ button {
   margin: 0 !important;
   width: 100% !important;
 }
+.invite-primary-row {
+  margin: 10px 0 12px;
+}
+
+.btn-invite-primary {
+  width: 100%;
+  justify-content: center;
+  padding: 12px 16px;
+  font-weight: 600;
+}
+
+.participants-block .input-group-inline {
+  margin-bottom: 12px;
+}
+/* Espaço extra embaixo para o botão flutuante não cobrir o último item do histórico */
+#main-app {
+  padding-bottom: 110px;
+}
+
+@media (min-width: 768px) {
+  #main-app {
+    padding-bottom: 90px;
+  }
+}
+.global-user-banner {
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: center;
+  border: 1px solid rgba(12, 74, 110, 0.16);
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.global-user-banner.positivo {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+
+.global-user-banner.negativo {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+.global-user-banner.neutro {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+  /* Cabeçalho compacto com login na esquerda, bandeiras na direita e logo ao lado do título */
+.app-header {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.top-utility-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.brand-row .logo-badge {
+  margin: 0;
+  width: 32px;
+  height: 32px;
+}
+
+.brand-row h1 {
+  margin: 0;
+  font-size: 1.45rem;
+  line-height: 1.1;
+}
+
+.app-header .app-subtitle {
+  margin: 3px 0 0;
+  font-size: 0.82rem;
+}
+
+.global-user-banner {
+  margin-top: 8px;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+}
+/* Respiro melhor no cabeçalho e corte dos espaços vazios acima e abaixo */
+.app-header {
+  margin-top: 0 !important;
+  margin-bottom: 6px !important;
+  padding: 4px 2px 6px !important;
+}
+
+.top-utility-bar {
+  margin-top: 0 !important;
+  margin-bottom: 8px !important;
+  gap: 12px;
+}
+
+.top-utility-bar .user-pill {
+  gap: 8px;
+  padding: 5px 10px;
+}
+
+.top-utility-bar .lang-switcher {
+  gap: 6px;
+}
+
+.brand-row {
+  gap: 10px;
+  margin: 2px 0;
+}
+
+.app-header .app-subtitle {
+  margin: 4px 0 0 !important;
+}
+
+.global-user-banner {
+  margin-top: 4px;
+  margin-bottom: 8px;
+}

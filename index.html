@@ -64,20 +64,25 @@
           </div>
         </div>
 
-        <div class="logo-badge" aria-hidden="true">
-          <svg width="28" height="28" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M7 4h18v24l-3-2-3 2-3-2-3 2-3-2-3 2V4z"/>
-            <line x1="16" y1="3" x2="16" y2="29" stroke-dasharray="2.5 2.5"/>
-            <path d="M12.5 11.5h-2a1.5 1.5 0 0 0 0 3h1a1.5 1.5 0 0 1 0 3h-2"/>
-            <line x1="11" y1="10" x2="11" y2="11.5"/>
-            <line x1="11" y1="17.5" x2="11" y2="19"/>
-            <polyline points="19.5 12 22.5 12 21 10.5"/>
-            <polyline points="22.5 17 19.5 17 21 18.5"/>
-          </svg>
+        <div class="brand-row">
+          <div class="logo-badge" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M7 4h18v24l-3-2-3 2-3-2-3 2-3-2-3 2V4z"/>
+              <line x1="16" y1="3" x2="16" y2="29" stroke-dasharray="2.5 2.5"/>
+              <path d="M12.5 11.5h-2a1.5 1.5 0 0 0 0 3h1a1.5 1.5 0 0 1 0 3h-2"/>
+              <line x1="11" y1="10" x2="11" y2="11.5"/>
+              <line x1="11" y1="17.5" x2="11" y2="19"/>
+              <polyline points="19.5 12 22.5 12 21 10.5"/>
+              <polyline points="22.5 17 19.5 17 21 18.5"/>
+            </svg>
+          </div>
+          <h1>SplitRAO</h1>
         </div>
-        <h1>SplitRAO</h1>
-        <p data-i18n="appSubtitle">Divisão inteligente de despesas em tempo real</p>
+        <p class="app-subtitle" data-i18n="appSubtitle">Divisão inteligente de despesas em tempo real</p>
       </header>
+
+<!-- Resumo Global do Usuário acima do grupo -->
+      <div id="global-user-banner" class="global-user-banner hidden"></div>
 
       <!-- Cartão Principal do Grupo em Destaque + Menu de 3 Tracinhos -->
       <section class="card group-bar-card">
@@ -137,15 +142,16 @@
         <div class="participants-block">
           <div class="participants-header">
             <h3 data-i18n="sec1Title">Participantes do Grupo</h3>
-            <div class="invite-actions-inline">
-              <button type="button" id="btn-compartilhar-grupo" class="btn-invite-link" data-i18n="inviteLinkBtn">🔗 Enviar Link</button>
-              <button type="button" id="btn-add-eu" class="btn-eu-sm" data-i18n-title="addMeBtnTitle" title="Adicionar ou selecionar você no grupo">👤 Eu</button>
-            </div>
+            <button type="button" id="btn-toggle-sem-app" class="btn-secondary-sm" data-i18n="addVirtualPersonBtn">+ Sem app</button>
           </div>
 
-          <form id="form-pessoa" class="input-group-inline">
+          <div class="invite-primary-row">
+            <button type="button" id="btn-compartilhar-grupo" class="btn-invite-link btn-invite-primary" data-i18n="inviteLinkBtn">🔗 Enviar Link</button>
+          </div>
+
+          <form id="form-pessoa" class="input-group-inline hidden">
             <input type="text" id="nome-pessoa" data-i18n-placeholder="personPlaceholder" placeholder="Nome de quem não usa o app..." autocomplete="off">
-            <button type="submit" class="btn-secondary" data-i18n="addVirtualPersonBtn">+ Sem app</button>
+            <button type="submit" class="btn-secondary">Adicionar</button>
           </form>
 
           <div id="lista-pessoas" class="tags-container"></div>
@@ -163,8 +169,6 @@
         </div>
 
         <div id="meu-saldo-box" class="meu-saldo-box hidden"></div>
-
-        <div id="resumo-saldos" class="saldos-grid"></div>
 
         <div class="divider"></div>
 

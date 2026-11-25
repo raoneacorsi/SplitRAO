@@ -183,6 +183,28 @@ function setMeParticipantName(grupo, pessoaNome) {
   }
 }
 
+function garantirUsuarioLogadoNoGrupo(grupo) {
+  if (!grupo || typeof grupo !== 'object') return false;
+  if (!Array.isArray(grupo.pessoas)) grupo.pessoas = [];
+
+  const nomeUsuario = getNomeUsuarioEfetivo();
+  if (!nomeUsuario) return false;
+
+  const alvo = normalizarTexto(nomeUsuario);
+  const existente = grupo.pessoas.find(p => normalizarTexto(p) === alvo);
+
+  if (!existente) {
+    grupo.pessoas.push(nomeUsuario);
+    setMeParticipantName(grupo, nomeUsuario);
+    return true;
+  }
+
+  if (grupo.meuParticipante !== existente) {
+    setMeParticipantName(grupo, existente);
+  }
+  return false;
+}
+
 async function persistirNomeNoPerfil(nome) {
   const limpo = String(nome || '').trim();
   if (!limpo) return;
@@ -324,7 +346,6 @@ function parseNumeroFlexivel(v) {
   if (typeof v === 'string') {
     const limpo = v.replace(/[^\d,.-]/g, '').trim();
     if (!limpo) return 0;
-    // Se tiver vírgula e ponto, assume ponto como milhar e vírgula como decimal
     const normalizado = (limpo.includes(',') && limpo.includes('.'))
       ? limpo.replace(/\./g, '').replace(',', '.')
       : limpo.replace(',', '.');
@@ -346,7 +367,6 @@ function normalizarEstruturaGrupo(id, raw) {
     const alvo = normalizarTexto(limpo);
     const achado = pessoas.find(p => normalizarTexto(p) === alvo);
     if (achado) return achado;
-    // Se o nome existe no pagamento/gasto mas não estava na lista pessoas, inclui para não sumir do cálculo
     pessoas.push(limpo);
     return limpo;
   };
@@ -366,7 +386,6 @@ function normalizarEstruturaGrupo(id, raw) {
   }
 
   const gastosBrutos = Array.isArray(g.gastos) ? [...g.gastos] : [];
-  // Caso o JSON tenha um array separado de pagamentos/quitações/acertos, junta também
   const extrasPagamento = [
     ...(Array.isArray(g.pagamentos) ? g.pagamentos : []),
     ...(Array.isArray(g.quitacoes) ? g.quitacoes : []),
@@ -388,12 +407,9 @@ function normalizarEstruturaGrupo(id, raw) {
       Boolean(item.de || item.from || item.recebedor || item.para || item.quemRecebeu);
 
     if (parecePagamento) {
-      const de = resolverNomePessoa(
-        item.de ?? item.from ?? item.quemPagou ?? item.origem ?? item.pagador
-      );
-      const para = resolverNomePessoa(
-        item.para ?? item.to ?? item.quemRecebeu ?? item.recebedor ?? item.destino
-      );
+      const partes = extrairPartesPagamento(item);
+      const de = resolverNomePessoa(partes.de);
+      const para = resolverNomePessoa(partes.para);
 
       const moeda = item.moeda || 'BRL';
       const taxaCambio = parseNumeroFlexivel(item.taxaCambio) > 0 ? parseNumeroFlexivel(item.taxaCambio) : 1;
@@ -1032,6 +1048,13 @@ function aplicarIdiomaNaInterface() {
   atualizarSeletorMoedaUI();
 
   const btnSubmitGasto = document.getElementById('btn-submit-gasto');
+  const btnAddPessoaConfirm = document.querySelector('#form-pessoa button[type="submit"]');
+if (btnAddPessoaConfirm) {
+  btnAddPessoaConfirm.textContent =
+    currentLang === 'en' ? 'Add' :
+    currentLang === 'es' ? 'Añadir' :
+    'Adicionar';
+}
   const editIdAtual = document.getElementById('edit-gasto-id')?.value || '';
   if (btnSubmitGasto) {
     btnSubmitGasto.textContent = editIdAtual ? t('updateExpenseBtn') : t('saveExpenseBtn');
@@ -1273,7 +1296,7 @@ async function entrarPorCodigoOuLink() {
   }
 }
 
-// ==================== PARTICIPANTES, SEM APP E FUNÇÃO "EU" ====================
+// ==================== PARTICIPANTES E SEM APP ====================
 async function adicionarParticipante(nomeRaw, { marcarComoEu = false, semApp = false } = {}) {
   const nome = String(nomeRaw || '').trim();
   if (!nome) return false;
@@ -1305,33 +1328,6 @@ async function adicionarParticipante(nomeRaw, { marcarComoEu = false, semApp = f
   await salvarGrupoNaNuvem(grupo);
   renderTudo();
   return true;
-}
-
-async function acionarBotaoEu() {
-  const grupo = getGrupoAtivo();
-  const inputPessoa = document.getElementById('nome-pessoa');
-  const digitadoNoCampo = inputPessoa?.value?.trim() || '';
-
-  let nomeAlvo = digitadoNoCampo || getNomeUsuarioEfetivo();
-
-  if (!nomeAlvo) {
-    const perguntado = prompt(t('askMyNamePrompt'));
-    if (!perguntado || !perguntado.trim()) return;
-    nomeAlvo = perguntado.trim();
-  }
-
-  await persistirNomeNoPerfil(nomeAlvo);
-  if (inputPessoa) inputPessoa.value = '';
-
-  const existente = grupo.pessoas.find(p => normalizarTexto(p) === normalizarTexto(nomeAlvo));
-  if (existente) {
-    setMeParticipantName(grupo, existente);
-    await salvarGrupoNaNuvem(grupo);
-    renderTudo();
-    return;
-  }
-
-  await adicionarParticipante(nomeAlvo, { marcarComoEu: true, semApp: false });
 }
 
 async function removerParticipante(nome) {
@@ -1910,7 +1906,6 @@ function calcularBalancoGrupo(grupo) {
     };
   });
 
-  // Helper para achar a chave exata em `stats` mesmo com diferença de caixa/acentos
   const acharChaveStats = (nome) => {
     if (!nome) return null;
     if (stats[nome]) return nome;
@@ -1924,15 +1919,7 @@ function calcularBalancoGrupo(grupo) {
     if (!g) continue;
     const valBRL = Number(getValorEmBRL(g)) || 0;
 
-    const tipoNorm = String(g.tipo || '').toLowerCase().trim();
-    const ehPagamento =
-      tipoNorm === 'pagamento' ||
-      tipoNorm === 'quitacao' ||
-      tipoNorm === 'quitação' ||
-      tipoNorm === 'acerto' ||
-      tipoNorm === 'settlement';
-
-   if (g.tipo === 'pagamento') {
+    if (g.tipo === 'pagamento') {
       const { de: deRaw, para: paraRaw } = extrairPartesPagamento(g);
       const chaveDe = acharChaveStats ? acharChaveStats(deRaw) : deRaw;
       const chavePara = acharChaveStats ? acharChaveStats(paraRaw) : paraRaw;
@@ -2076,41 +2063,20 @@ function renderMeuSaldoDestaque(grupo, stats, transferencias) {
 
 function renderSaldosEAcertos() {
   const grupo = getGrupoAtivo();
-  const grid = document.getElementById('resumo-saldos');
   const lista = document.getElementById('lista-acertos');
-  if (!grid || !lista) return;
+  if (!lista) return;
 
-  grid.innerHTML = '';
   lista.innerHTML = '';
 
   if (grupo.pessoas.length === 0) {
     document.getElementById('meu-saldo-box')?.classList.add('hidden');
-    grid.innerHTML = `<span class="empty-state-text">${escapeHTML(t('registerParticipantsSaldos'))}</span>`;
+    lista.innerHTML = `<li class="empty-state-text" style="background:none;border:none;padding:4px 0;">${escapeHTML(t('registerParticipantsSaldos'))}</li>`;
     return;
   }
 
   const { stats, transferencias } = calcularBalancoGrupo(grupo);
-  const meName = getMeParticipantName(grupo);
 
   renderMeuSaldoDestaque(grupo, stats, transferencias);
-
-  grupo.pessoas.forEach(p => {
-    const saldo = stats[p]?.saldo || 0;
-    const isMe = p === meName;
-    const card = document.createElement('div');
-    card.className = isMe ? 'saldo-card saldo-card-me' : 'saldo-card';
-
-    const classeCor = saldo > 0.01 ? 'positivo' : (saldo < -0.01 ? 'negativo' : 'neutro');
-    const sinal = saldo > 0.01 ? '+' : '';
-    const statusTxt = saldo > 0.01 ? t('statusReceiveShort') : (saldo < -0.01 ? t('statusPayShort') : t('statusSettledShort'));
-
-    card.innerHTML = `
-      <div class="saldo-nome">${escapeHTML(p)}${isMe ? ` (${escapeHTML(t('meBadge'))})` : ''}</div>
-      <div class="saldo-status-label ${classeCor}">${escapeHTML(statusTxt)}</div>
-      <div class="saldo-valor ${classeCor}">${sinal}${escapeHTML(formatMoney(saldo, 'BRL'))}</div>
-    `;
-    grid.appendChild(card);
-  });
 
   if (transferencias.length === 0) {
     lista.innerHTML = `<li class="empty-state-text" style="background:none;border:none;padding:4px 0;">${escapeHTML(t('allSettledShort'))}</li>`;
@@ -2181,6 +2147,7 @@ function getLancamentosFiltrados(grupo) {
   }
   return lista.filter(g => g.tipo !== 'pagamento' && g.categoria === filtroCategoriaAtual);
 }
+
 function extrairPartesPagamento(g) {
   const de = g?.de ?? g?.from ?? g?.quemPagou ?? g?.origem ?? g?.pagador ?? '';
 
@@ -2195,6 +2162,7 @@ function extrairPartesPagamento(g) {
 
   return { de: String(de || '').trim(), para: String(para || '').trim() };
 }
+
 function renderHistorico() {
   const grupo = getGrupoAtivo();
   const ul = document.getElementById('lista-gastos');
@@ -2250,7 +2218,7 @@ function renderHistorico() {
         </div>
       `;
       li.querySelector('.btn-del-gasto')?.addEventListener('click', () => apagarLancamento(g.id));
-     } else {
+    } else {
       li.className = 'gasto-item';
       const catObj = getCategoriaObj(g.categoria);
       const catNome = getNomeCategoriaTraduzido(g.categoria);
@@ -2684,12 +2652,10 @@ async function importarBackupJSON(file) {
     for (const [chaveOriginal, gdata] of Object.entries(gruposFonte)) {
       if (!gdata || typeof gdata !== 'object') continue;
 
-      // Garante um ID válido e único se vier vazio ou sem prefixo de grupo
       const idCandidato = (typeof gdata.id === 'string' && gdata.id.trim())
         ? gdata.id.trim()
         : (typeof chaveOriginal === 'string' && chaveOriginal.trim() ? chaveOriginal.trim() : gerarId('grp'));
 
-      // Se já existe um grupo diferente com o mesmo ID e nomes distintos, gera novo ID para não colidir
       const gid = (state.grupos[idCandidato] && state.grupos[idCandidato].nome !== gdata.nome)
         ? gerarId('grp')
         : idCandidato;
@@ -2701,7 +2667,6 @@ async function importarBackupJSON(file) {
       if (!primeiroIdNovo) primeiroIdNovo = gid;
 
       if (currentUser) {
-        // Garante que o grupo não fique marcado como excluído e vincula o usuário
         await setDoc(getGroupDocRef(gid), {
           id: norm.id,
           nome: norm.nome,
@@ -2739,13 +2704,52 @@ async function importarBackupJSON(file) {
 }
 
 // ==================== RENDERIZAÇÃO GERAL ====================
+// ==================== RENDERIZAÇÃO GERAL ====================
+function renderResumoGlobalUsuario() {
+  const banner = document.getElementById('global-user-banner');
+  if (!banner) return;
+
+  const grupoAtivo = getGrupoAtivo();
+  const nomeUsuario = getMeParticipantName(grupoAtivo) || getNomeUsuarioEfetivo();
+  if (!nomeUsuario) {
+    banner.classList.add('hidden');
+    banner.innerHTML = '';
+    return;
+  }
+
+  const { consolidadoPorPessoa } = calcularBalancoGlobal();
+  const alvo = normalizarTexto(nomeUsuario);
+  const encontrado = consolidadoPorPessoa.find(item => normalizarTexto(item.nome) === alvo);
+  const saldoTotal = encontrado ? (Number(encontrado.saldoTotal) || 0) : 0;
+
+  banner.classList.remove('hidden', 'positivo', 'negativo', 'neutro');
+
+  if (saldoTotal > 0.01) {
+    banner.classList.add('positivo');
+    banner.textContent = `No total devem a você: ${formatMoney(saldoTotal, 'BRL')}`;
+  } else if (saldoTotal < -0.01) {
+    banner.classList.add('negativo');
+    banner.textContent = `No total você deve: ${formatMoney(Math.abs(saldoTotal), 'BRL')}`;
+  } else {
+    banner.classList.add('neutro');
+    banner.textContent = 'No total está tudo quitado: R$ 0,00';
+  }
+}
+
 function renderTudo() {
+  const grupo = getGrupoAtivo();
+  const adicionouUsuario = garantirUsuarioLogadoNoGrupo(grupo);
+  if (adicionouUsuario) {
+    salvarEstadoLocal();
+  }
+
   renderSeletorGrupos();
   renderListaPessoas();
   renderPagadorSelect();
   renderSeletorCategorias();
   renderAreaDivisao();
   renderSaldosEAcertos();
+  renderResumoGlobalUsuario();
   renderFiltroCategorias();
   renderHistorico();
   renderPainelTotais();
@@ -2757,11 +2761,22 @@ function initListeners() {
     e.stopPropagation();
     setMenu3DotsAberto(!menu3DotsAberto);
   });
+
   document.getElementById('btn-fechar-form-gasto')?.addEventListener('click', () => {
-  setFormGastoVisivel(false);
-});
+    setFormGastoVisivel(false);
+  });
+
   document.getElementById('dropdown-3dots')?.addEventListener('click', (e) => {
     e.stopPropagation();
+  });
+
+  document.getElementById('btn-toggle-sem-app')?.addEventListener('click', () => {
+    const formPessoa = document.getElementById('form-pessoa');
+    const vaiAbrir = formPessoa?.classList.contains('hidden');
+    formPessoa?.classList.toggle('hidden', !vaiAbrir);
+    if (vaiAbrir) {
+      document.getElementById('nome-pessoa')?.focus();
+    }
   });
 
   document.addEventListener('click', () => {
@@ -2771,17 +2786,20 @@ function initListeners() {
   document.getElementById('select-grupo')?.addEventListener('change', (e) => trocarGrupoAtivo(e.target.value));
   document.getElementById('btn-novo-grupo')?.addEventListener('click', criarNovoGrupo);
   document.getElementById('btn-renomear-grupo')?.addEventListener('click', renomearGrupoAtual);
+
   document.getElementById('btn-fab-novo-gasto')?.addEventListener('click', () => {
-  if (typeof cancelarEdicao === 'function') cancelarEdicao();
-  setFormGastoVisivel(true);
-  if (typeof renderPagadorSelect === 'function') renderPagadorSelect();
-  if (typeof renderAreaDivisao === 'function') renderAreaDivisao();
-});
+    if (typeof cancelarEdicao === 'function') cancelarEdicao();
+    setFormGastoVisivel(true);
+    if (typeof renderPagadorSelect === 'function') renderPagadorSelect();
+    if (typeof renderAreaDivisao === 'function') renderAreaDivisao();
+  });
+
   document.getElementById('modal-form-gasto')?.addEventListener('click', (e) => {
-  if (e.target.id === 'modal-form-gasto') {
-    setFormGastoVisivel(false);
-  }
-});
+    if (e.target.id === 'modal-form-gasto') {
+      setFormGastoVisivel(false);
+    }
+  });
+
   document.getElementById('btn-excluir-grupo')?.addEventListener('click', async () => {
     setMenu3DotsAberto(false);
     await excluirOuSairDoGrupo();
@@ -2827,17 +2845,17 @@ function initListeners() {
     const input = document.getElementById('nome-pessoa');
     if (!input?.value?.trim()) return;
     const ok = await adicionarParticipante(input.value.trim(), { marcarComoEu: false, semApp: true });
-    if (ok) input.value = '';
+    if (ok) {
+      input.value = '';
+      document.getElementById('form-pessoa')?.classList.add('hidden');
+    }
   });
-
-  document.getElementById('btn-add-eu')?.addEventListener('click', acionarBotaoEu);
 
   document.getElementById('btn-abrir-form-gasto')?.addEventListener('click', () => {
     setFormGastoVisivel(true);
     renderPagadorSelect();
     renderAreaDivisao();
   });
-  document.getElementById('btn-fechar-form-gasto')?.addEventListener('click', () => setFormGastoVisivel(false));
   document.getElementById('btn-cancelar-edicao')?.addEventListener('click', cancelarEdicao);
 
   document.getElementById('btn-data-gasto')?.addEventListener('click', () => {

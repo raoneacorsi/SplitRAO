@@ -215,7 +215,8 @@ export const I18N = {
     need2PeopleAlert: 'É preciso ter pelo menos 2 participantes no grupo para registrar um pagamento.',
     diffPeopleAlert: 'Quem paga e quem recebe devem ser pessoas diferentes.',
     invalidAmountAlert: 'Informe um valor válido maior que zero.',
-    groupNotFoundAlert: 'Grupo não encontrado na nuvem. Verifique o link ou código.'
+    groupNotFoundAlert: 'Grupo não encontrado na nuvem. Verifique o link ou código.',
+    addPersonConfirmBtn: 'Adicionar',
   },
   es: {
     appSubtitle: 'División inteligente de gastos en tiempo real',
@@ -431,7 +432,8 @@ export const I18N = {
     need2PeopleAlert: 'Se necesitan al menos 2 participantes en el grupo para registrar un pago.',
     diffPeopleAlert: 'Quien paga y quien recibe deben ser personas diferentes.',
     invalidAmountAlert: 'Ingresa un monto válido mayor que cero.',
-    groupNotFoundAlert: 'Grupo no encontrado en la nube. Verifica el enlace o código.'
+    groupNotFoundAlert: 'Grupo no encontrado en la nube. Verifica el enlace o código.',
+    addPersonConfirmBtn: 'Añadir',
   },
   en: {
     appSubtitle: 'Smart real-time expense splitting',
@@ -647,7 +649,8 @@ export const I18N = {
     need2PeopleAlert: 'You need at least 2 participants in the group to record a payment.',
     diffPeopleAlert: 'Payer and recipient must be different people.',
     invalidAmountAlert: 'Please enter a valid amount greater than zero.',
-    groupNotFoundAlert: 'Group not found in the cloud. Check the link or code.'
+    groupNotFoundAlert: 'Group not found in the cloud. Check the link or code.',
+    addPersonConfirmBtn: 'Add',
   }
 };
 
