@@ -658,6 +658,145 @@ async function salvarGrupoNaNuvem(grupo) {
     }, 300);
   }
 }
+function renomearNomeEmGrupo(grupo, nomeAntigo, nomeNovo) {
+  if (!grupo || !nomeAntigo || !nomeNovo) return false;
+  if (normalizarTexto(nomeAntigo) === normalizarTexto(nomeNovo)) return false;
+
+  let alterou = false;
+  const alvoAntigo = normalizarTexto(nomeAntigo);
+  const alvoNovo = normalizarTexto(nomeNovo);
+
+  const substituirNome = (valor) => {
+    if (!valor || typeof valor !== 'string') return valor;
+    if (valor === nomeAntigo || normalizarTexto(valor) === alvoAntigo) {
+      alterou = true;
+      return nomeNovo;
+    }
+    return valor;
+  };
+
+  // 1. Lista de pessoas (evitando duplicata caso nomeNovo já exista no grupo)
+  if (Array.isArray(grupo.pessoas)) {
+    const jaTemNovo = grupo.pessoas.some(p => normalizarTexto(p) === alvoNovo);
+    const mapeadas = [];
+    for (const p of grupo.pessoas) {
+      if (p === nomeAntigo || normalizarTexto(p) === alvoAntigo) {
+        alterou = true;
+        if (!jaTemNovo && !mapeadas.some(x => normalizarTexto(x) === alvoNovo)) {
+          mapeadas.push(nomeNovo);
+        }
+      } else if (!mapeadas.some(x => normalizarTexto(x) === normalizarTexto(p))) {
+        mapeadas.push(p);
+      }
+    }
+    grupo.pessoas = mapeadas;
+  }
+
+  // 2. Lista de participantes sem app, se aplicável
+  if (Array.isArray(grupo.participantesSemApp)) {
+    const semAppAtualizada = [];
+    for (const p of grupo.participantesSemApp) {
+      const prox = substituirNome(p);
+      if (!semAppAtualizada.some(x => normalizarTexto(x) === normalizarTexto(prox))) {
+        semAppAtualizada.push(prox);
+      }
+    }
+    grupo.participantesSemApp = semAppAtualizada;
+  }
+
+  // 3. Identidade "Eu" no grupo e no cache local
+  if (grupo.meuParticipante === nomeAntigo || normalizarTexto(grupo.meuParticipante) === alvoAntigo) {
+    grupo.meuParticipante = nomeNovo;
+    alterou = true;
+  }
+  if (grupo.id && meByGroupCache[grupo.id]) {
+    if (meByGroupCache[grupo.id] === nomeAntigo || normalizarTexto(meByGroupCache[grupo.id]) === alvoAntigo) {
+      meByGroupCache[grupo.id] = nomeNovo;
+      try {
+        localStorage.setItem(ME_BY_GROUP_STORAGE_KEY, JSON.stringify(meByGroupCache));
+      } catch {}
+    }
+  }
+
+  // 4. Despesas e pagamentos/acertos
+  if (Array.isArray(grupo.gastos)) {
+    grupo.gastos = grupo.gastos.map(g => {
+      if (!g || typeof g !== 'object') return g;
+
+      if (g.tipo === 'pagamento') {
+        const novoDe = substituirNome(g.de);
+        const novoPara = substituirNome(g.para);
+        return {
+          ...g,
+          de: novoDe,
+          para: novoPara
+        };
+      }
+
+      const novoPagador = substituirNome(g.pagador);
+      const novosParticipantes = Array.isArray(g.participantes)
+        ? g.participantes.map(p => substituirNome(p))
+        : g.participantes;
+
+      let novaDivisao = g.divisao;
+      if (g.divisao && typeof g.divisao === 'object') {
+        novaDivisao = {};
+        for (const [k, v] of Object.entries(g.divisao)) {
+          const chaveAtualizada = substituirNome(k);
+          novaDivisao[chaveAtualizada] = (novaDivisao[chaveAtualizada] || 0) + (Number(v) || 0);
+        }
+      }
+
+      let novasCotas = g.cotas;
+      if (g.cotas && typeof g.cotas === 'object') {
+        novasCotas = {};
+        for (const [k, v] of Object.entries(g.cotas)) {
+          const chaveAtualizada = substituirNome(k);
+          novasCotas[chaveAtualizada] = (novasCotas[chaveAtualizada] || 0) + (Number(v) || 0);
+        }
+      }
+
+      return {
+        ...g,
+        pagador: novoPagador,
+        ...(novosParticipantes !== undefined ? { participantes: novosParticipantes } : {}),
+        ...(novaDivisao !== undefined ? { divisao: novaDivisao } : {}),
+        ...(novasCotas !== undefined ? { cotas: novasCotas } : {})
+      };
+    });
+  }
+
+  return alterou;
+}
+
+async function atualizarMeuNomeEmTodosOsGrupos() {
+  const grupoAtivo = getGrupoAtivo();
+  const nomeAtual = getMeParticipantName(grupoAtivo) || getNomeUsuarioEfetivo() || '';
+  const entrada = prompt(t('editMyNamePrompt'), nomeAtual);
+  if (entrada === null) return;
+
+  const novoNome = entrada.trim();
+  if (!novoNome) {
+    alert(t('myNameEmptyAlert'));
+    return;
+  }
+
+  await persistirNomeNoPerfil(novoNome);
+
+  const grupos = Object.values(state.grupos || {});
+  for (const grupo of grupos) {
+    const nomeAntigoNoGrupo = getMeParticipantName(grupo) || nomeAtual;
+    if (nomeAntigoNoGrupo) {
+      renomearNomeEmGrupo(grupo, nomeAntigoNoGrupo, novoNome);
+    }
+    garantirUsuarioLogadoNoGrupo(grupo);
+    await salvarGrupoNaNuvem(grupo);
+  }
+
+  renderAuthUI();
+  renderTudo();
+  alert(t('myNameUpdatedAlert', { name: novoNome }));
+}
 
 function assinarGrupoAtivo(groupId) {
   if (unsubscribeGroupDoc) {
@@ -3161,7 +3300,10 @@ function initListeners() {
     }
     renderTudo();
   });
-
+    document.getElementById('btn-editar-meu-nome')?.addEventListener('click', async () => {
+    setMenu3DotsAberto(false);
+    await atualizarMeuNomeEmTodosOsGrupos();
+});
   document.getElementById('btn-abrir-quitar')?.addEventListener('click', () => abrirModalQuitar());
   document.getElementById('btn-fechar-quitar')?.addEventListener('click', fecharModalQuitar);
   document.getElementById('btn-cancelar-quitar')?.addEventListener('click', fecharModalQuitar);

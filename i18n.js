@@ -226,6 +226,10 @@ export const I18N = {
     badgePagar: 'A pagar',
     badgeReceber: 'A receber',
     badgeQuitado: 'Quitado',
+    editMyNameBtn: '✏️ Alterar meu nome',
+    editMyNamePrompt: 'Digite o novo nome que você quer usar nos grupos:',
+    myNameUpdatedAlert: '✅ Seu nome foi atualizado para "{name}" em todos os grupos!',
+    myNameEmptyAlert: 'Digite um nome válido.', 
   },
   es: {
     appSubtitle: 'División inteligente de gastos en tiempo real',
@@ -452,6 +456,10 @@ export const I18N = {
     badgePagar: 'Por pagar',
     badgeReceber: 'Por cobrar',
     badgeQuitado: 'Al día',
+    editMyNameBtn: '✏️ Cambiar mi nombre',
+    editMyNamePrompt: 'Escribe el nuevo nombre que quieres usar en los grupos:',
+    myNameUpdatedAlert: '✅ ¡Tu nombre se actualizó a "{name}" en todos los grupos!',
+    myNameEmptyAlert: 'Escribe un nombre válido.',
   },
   en: {
     appSubtitle: 'Smart real-time expense splitting',
@@ -673,11 +681,15 @@ export const I18N = {
     undoBtn: 'Undo',
     deletedToastMsg: 'Deleted: {item}',
     resumoDevo: 'You owe {pessoa} {valor}',
-  resumoDevem: '{pessoa} owes you {valor}',
-  resumoQuitado: 'All settled up',
-  badgePagar: 'To pay',
-  badgeReceber: 'To receive',
-  badgeQuitado: 'Settled',
+    resumoDevem: '{pessoa} owes you {valor}',
+    resumoQuitado: 'All settled up',
+    badgePagar: 'To pay',
+    badgeReceber: 'To receive',
+    badgeQuitado: 'Settled',
+    editMyNameBtn: '✏️ Change my name',
+    editMyNamePrompt: 'Enter the new name you want to use across groups:',
+    myNameUpdatedAlert: '✅ Your name has been updated to "{name}" across all groups!',
+    myNameEmptyAlert: 'Please enter a valid name.',
   }
 };
 
