@@ -1996,3 +1996,62 @@ button {
 .toast-undo-btn:hover {
   background: #7dd3fc;
 }
+.resumo-divida {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border-radius: 10px;
+  border-left: 4px solid #64748b;
+  background: rgba(100, 116, 139, 0.08);
+}
+
+.resumo-texto {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.resumo-valor {
+  font-weight: 700;
+  font-size: 1.22rem;
+}
+
+.resumo-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.resumo-devo {
+  border-left-color: #dc2626;
+  background: rgba(220, 38, 38, 0.08);
+}
+.resumo-devo .resumo-badge {
+  background: rgba(220, 38, 38, 0.16);
+  color: #b91c1c;
+}
+
+.resumo-receber {
+  border-left-color: #16a34a;
+  background: rgba(22, 163, 74, 0.08);
+}
+.resumo-receber .resumo-badge {
+  background: rgba(22, 163, 74, 0.16);
+  color: #15803d;
+}
+
+.resumo-quitado {
+  border-left-color: #0284c7;
+  background: rgba(2, 132, 199, 0.08);
+}
+.resumo-quitado .resumo-badge {
+  background: rgba(2, 132, 199, 0.16);
+  color: #0369a1;
+}

@@ -88,8 +88,11 @@
         <p class="app-subtitle" data-i18n="appSubtitle">Divisão inteligente de despesas em tempo real</p>
       </header>
 
-      <!-- Resumo Global do Usuário acima do grupo -->
-      <div id="global-user-banner" class="global-user-banner hidden"></div>
+      <!-- Resumo Global do Usuário acima do grupo (em destaque e traduzível) -->
+      <div id="global-user-banner" class="global-user-banner resumo-divida resumo-quitado hidden" aria-live="polite">
+        <span id="global-user-badge" class="resumo-badge"></span>
+        <p id="global-user-texto" class="resumo-texto"></p>
+      </div>
 
       <!-- Cartão Principal do Grupo em Destaque + Menu de 3 Tracinhos -->
       <section class="card group-bar-card">

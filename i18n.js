@@ -220,6 +220,12 @@ export const I18N = {
     importSplitwiseBtn: 'Importar do Splitwise',
     undoBtn: 'Desfazer',
     deletedToastMsg: 'Excluído: {item}',
+    resumoDevo: 'Você deve {valor} para {pessoa}',
+    resumoDevem: '{pessoa} deve {valor} para você',
+    resumoQuitado: 'Tudo certo por aqui, ninguém deve nada',
+    badgePagar: 'A pagar',
+    badgeReceber: 'A receber',
+    badgeQuitado: 'Quitado',
   },
   es: {
     appSubtitle: 'División inteligente de gastos en tiempo real',
@@ -440,6 +446,12 @@ export const I18N = {
     importSplitwiseBtn: 'Importar de Splitwise',
     undoBtn: 'Deshacer',
     deletedToastMsg: 'Eliminado: {item}',
+    resumoDevo: 'Le debes {valor} a {pessoa}',
+    resumoDevem: '{pessoa} te debe {valor}',
+    resumoQuitado: 'Todo al día, sin deudas',
+    badgePagar: 'Por pagar',
+    badgeReceber: 'Por cobrar',
+    badgeQuitado: 'Al día',
   },
   en: {
     appSubtitle: 'Smart real-time expense splitting',
@@ -660,6 +672,12 @@ export const I18N = {
     importSplitwiseBtn: 'Import from Splitwise',
     undoBtn: 'Undo',
     deletedToastMsg: 'Deleted: {item}',
+    resumoDevo: 'You owe {pessoa} {valor}',
+  resumoDevem: '{pessoa} owes you {valor}',
+  resumoQuitado: 'All settled up',
+  badgePagar: 'To pay',
+  badgeReceber: 'To receive',
+  badgeQuitado: 'Settled',
   }
 };
 

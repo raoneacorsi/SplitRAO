@@ -2873,18 +2873,35 @@ function renderResumoGlobalUsuario() {
   const encontrado = consolidadoPorPessoa.find(item => normalizarTexto(item.nome) === alvo);
   const saldoTotal = encontrado ? (Number(encontrado.saldoTotal) || 0) : 0;
 
-  banner.classList.remove('hidden', 'positivo', 'negativo', 'neutro');
+  banner.classList.remove('hidden', 'positivo', 'negativo', 'neutro', 'resumo-devo', 'resumo-receber', 'resumo-quitado');
+
+  let badgeText = '';
+  let fraseHTML = '';
 
   if (saldoTotal > 0.01) {
-    banner.classList.add('positivo');
-    banner.textContent = `No total devem a você: ${formatMoney(saldoTotal, 'BRL')}`;
+    const valorFmt = formatMoney(saldoTotal, 'BRL');
+    banner.classList.add('positivo', 'resumo-receber');
+    badgeText = t('badgeReceber');
+    fraseHTML = t('myBalanceReceiveTotal', {
+      val: `<strong class="resumo-valor">${escapeHTML(valorFmt)}</strong>`
+    });
   } else if (saldoTotal < -0.01) {
-    banner.classList.add('negativo');
-    banner.textContent = `No total você deve: ${formatMoney(Math.abs(saldoTotal), 'BRL')}`;
+    const valorFmt = formatMoney(Math.abs(saldoTotal), 'BRL');
+    banner.classList.add('negativo', 'resumo-devo');
+    badgeText = t('badgePagar');
+    fraseHTML = t('myBalancePayTotal', {
+      val: `<strong class="resumo-valor">${escapeHTML(valorFmt)}</strong>`
+    });
   } else {
-    banner.classList.add('neutro');
-    banner.textContent = 'No total está tudo quitado: R$ 0,00';
+    banner.classList.add('neutro', 'resumo-quitado');
+    badgeText = t('badgeQuitado');
+    fraseHTML = escapeHTML(t('myBalanceZero'));
   }
+
+  banner.innerHTML = `
+    <span id="global-user-badge" class="resumo-badge">${escapeHTML(badgeText)}</span>
+    <p id="global-user-texto" class="resumo-texto">${fraseHTML}</p>
+  `;
 }
 
 function renderTudo() {
