@@ -3255,43 +3255,42 @@ function initListeners() {
 
   document.getElementById('btn-copiar-texto')?.addEventListener('click', (e) => copiarWpp(e.currentTarget));
   document.getElementById('btn-copiar-global')?.addEventListener('click', (e) => copiarWpp(e.currentTarget));
+  window.addEventListener('DOMContentLoaded', sincronizarBotoesInstalar);
 
 // ==================== INSTALAÇÃO DO PWA ====================
-
 let deferredInstallPrompt = null;
 
-function isAppJaInstalado() {
+function isAppStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 }
 
-function isIOS() {
+function isAndroidDevice() {
+  return /android/i.test(window.navigator.userAgent);
+}
+
+function isIOSDevice() {
   return /iphone|ipad|ipod/i.test(window.navigator.userAgent);
 }
 
-function atualizarVisibilidadeBotoesInstalar(mostrar) {
+function sincronizarBotoesInstalar() {
+  const jaInstalado = isAppStandalone();
+  const deveMostrar = !jaInstalado;
+
   ['btn-instalar-app', 'btn-instalar-app-gate'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.classList.toggle('hidden', !mostrar);
+    if (el) el.classList.toggle('hidden', !deveMostrar);
   });
 }
 
-if (!isAppJaInstalado()) {
-  // Captura o prompt nativo no Android / Chrome / Edge
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredInstallPrompt = e;
-    atualizarVisibilidadeBotoesInstalar(true);
-  });
-
-  // No iOS (Safari), exibe o botão para mostrar o passo a passo manual
-  if (isIOS()) {
-    atualizarVisibilidadeBotoesInstalar(true);
-  }
-}
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  sincronizarBotoesInstalar();
+});
 
 window.addEventListener('appinstalled', () => {
   deferredInstallPrompt = null;
-  atualizarVisibilidadeBotoesInstalar(false);
+  sincronizarBotoesInstalar();
 });
 
 async function acionarInstalacaoApp() {
@@ -3302,16 +3301,21 @@ async function acionarInstalacaoApp() {
     const { outcome } = await deferredInstallPrompt.userChoice;
     if (outcome === 'accepted') {
       deferredInstallPrompt = null;
-      atualizarVisibilidadeBotoesInstalar(false);
+      sincronizarBotoesInstalar();
     }
     return;
   }
 
-  if (isIOS()) {
-    alert('Para instalar no iPhone/iPad:\n\n1. Toque no ícone de Compartilhar (quadrado com seta para cima) na barra do Safari.\n2. Role para baixo e toque em "Adicionar à Tela de Início".');
+  if (isIOSDevice()) {
+    alert('Para instalar no iPhone/iPad:\n\n1. Toque no botão Compartilhar do Safari.\n2. Toque em "Adicionar à Tela de Início".');
+  } else if (isAndroidDevice()) {
+    alert('Para instalar no Android:\n\n1. Toque nos 3 pontinhos (⋮) no canto superior direito do navegador.\n2. Toque em "Instalar aplicativo" ou "Adicionar à tela inicial".');
+  } else {
+    alert('Para instalar, use a opção "Instalar aplicativo" ou "Adicionar à tela inicial" no menu do navegador.');
   }
 }
 
+sincronizarBotoesInstalar();
 document.getElementById('btn-instalar-app')?.addEventListener('click', acionarInstalacaoApp);
 document.getElementById('btn-instalar-app-gate')?.addEventListener('click', acionarInstalacaoApp);
 }
