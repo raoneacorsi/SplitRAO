@@ -8,6 +8,12 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0284c7">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="SplitRAO">
+  <link rel="apple-touch-icon" href="icon-192.png">
 </head>
 <body>
   <main class="app-wrapper hidden" id="main-app">
@@ -123,6 +129,10 @@
               <button type="button" id="btn-exportar-json" class="dropdown-item">
                 <span>💾</span>
                 <span data-i18n="backupBtn">Backup</span>
+              </button>
+              <button type="button" id="btn-importar-splitwise" class="dropdown-item">
+              <span>📥</span>
+              <span data-i18n="importSplitwiseBtn">Importar do Splitwise</span>
               </button>
               <label for="input-importar-json" class="dropdown-item">
                 <span>📂</span>
@@ -498,5 +508,14 @@
   </div>
 
   <script type="module" src="app.js?v=8"></script>
+  <script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch((err) => {
+        console.warn('Falha ao registrar Service Worker:', err);
+      });
+    });
+  }
+</script>
 </body>
 </html>

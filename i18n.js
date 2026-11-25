@@ -217,6 +217,7 @@ export const I18N = {
     invalidAmountAlert: 'Informe um valor válido maior que zero.',
     groupNotFoundAlert: 'Grupo não encontrado na nuvem. Verifique o link ou código.',
     addPersonConfirmBtn: 'Adicionar',
+    importSplitwiseBtn: 'Importar do Splitwise'
   },
   es: {
     appSubtitle: 'División inteligente de gastos en tiempo real',
@@ -434,6 +435,7 @@ export const I18N = {
     invalidAmountAlert: 'Ingresa un monto válido mayor que cero.',
     groupNotFoundAlert: 'Grupo no encontrado en la nube. Verifica el enlace o código.',
     addPersonConfirmBtn: 'Añadir',
+    importSplitwiseBtn: 'Importar de Splitwise',
   },
   en: {
     appSubtitle: 'Smart real-time expense splitting',
@@ -651,6 +653,7 @@ export const I18N = {
     invalidAmountAlert: 'Please enter a valid amount greater than zero.',
     groupNotFoundAlert: 'Group not found in the cloud. Check the link or code.',
     addPersonConfirmBtn: 'Add',
+    importSplitwiseBtn: 'Import from Splitwise',
   }
 };
 
