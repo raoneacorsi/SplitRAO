@@ -134,6 +134,10 @@
               <span>📥</span>
               <span data-i18n="importSplitwiseBtn">Importar do Splitwise</span>
               </button>
+              <button type="button" id="btn-instalar-app" class="dropdown-item hidden">
+              <span>📲</span>
+              <span>Instalar aplicativo</span>
+              </button>
               <label for="input-importar-json" class="dropdown-item">
                 <span>📂</span>
                 <span data-i18n="importBtn">Importar</span>
@@ -479,6 +483,9 @@
       <div id="auth-feedback" class="auth-feedback hidden"></div>
 
       <form id="form-auth">
+        <button type="button" id="btn-instalar-app-gate" class="btn-secondary hidden" style="width: 100%; margin-top: 10px;">
+         📲 Instalar aplicativo no celular
+        </button>
         <div id="auth-name-group" class="form-group hidden">
           <label for="auth-name" data-i18n="nameLabel">Seu Nome (para a função "Eu")</label>
           <input type="text" id="auth-name" autocomplete="name" data-i18n-placeholder="namePlaceholder" placeholder="Ex: Rodrigo">

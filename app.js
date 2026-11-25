@@ -3161,6 +3161,65 @@ function initListeners() {
 
   document.getElementById('btn-copiar-texto')?.addEventListener('click', (e) => copiarWpp(e.currentTarget));
   document.getElementById('btn-copiar-global')?.addEventListener('click', (e) => copiarWpp(e.currentTarget));
+
+// ==================== INSTALAÇÃO DO PWA ====================
+
+let deferredInstallPrompt = null;
+
+function isAppJaInstalado() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+function isIOS() {
+  return /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+}
+
+function atualizarVisibilidadeBotoesInstalar(mostrar) {
+  ['btn-instalar-app', 'btn-instalar-app-gate'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('hidden', !mostrar);
+  });
+}
+
+if (!isAppJaInstalado()) {
+  // Captura o prompt nativo no Android / Chrome / Edge
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    atualizarVisibilidadeBotoesInstalar(true);
+  });
+
+  // No iOS (Safari), exibe o botão para mostrar o passo a passo manual
+  if (isIOS()) {
+    atualizarVisibilidadeBotoesInstalar(true);
+  }
+}
+
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  atualizarVisibilidadeBotoesInstalar(false);
+});
+
+async function acionarInstalacaoApp() {
+  if (typeof setMenu3DotsAberto === 'function') setMenu3DotsAberto(false);
+
+  if (deferredInstallPrompt) {
+    deferredInstallPrompt.prompt();
+    const { outcome } = await deferredInstallPrompt.userChoice;
+    if (outcome === 'accepted') {
+      deferredInstallPrompt = null;
+      atualizarVisibilidadeBotoesInstalar(false);
+    }
+    return;
+  }
+
+  if (isIOS()) {
+    alert('Para instalar no iPhone/iPad:\n\n1. Toque no ícone de Compartilhar (quadrado com seta para cima) na barra do Safari.\n2. Role para baixo e toque em "Adicionar à Tela de Início".');
+  }
+}
+
+document.getElementById('btn-instalar-app')?.addEventListener('click', acionarInstalacaoApp);
+document.getElementById('btn-instalar-app-gate')?.addEventListener('click', acionarInstalacaoApp);
 }
 
 // ==================== BOOT ====================
