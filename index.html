@@ -81,157 +81,187 @@
         </div>
       </header>
 
-      <!-- Resumo Global do Usuário acima do grupo -->
-      <div id="global-user-banner" class="global-user-banner resumo-divida resumo-quitado hidden" aria-live="polite">
-        <span id="global-user-badge" class="resumo-badge"></span>
-        <p id="global-user-texto" class="resumo-texto"></p>
-      </div>
+      <!-- ==================== TELA 1: LISTA DE GRUPOS ==================== -->
+      <section id="view-lista-grupos" class="app-view">
+        <div id="global-user-banner" class="global-user-banner resumo-divida resumo-quitado hidden" aria-live="polite">
+          <span id="global-user-badge" class="resumo-badge"></span>
+          <p id="global-user-texto" class="resumo-texto"></p>
+        </div>
 
-      <!-- Cartão Principal do Grupo + Participantes -->
-      <section class="card group-bar-card">
-        <div class="group-hero-row">
-          <div class="group-hero-title-wrap">
-            <div class="group-title-line">
-              <button type="button" id="btn-imagem-grupo" class="group-avatar-btn" title="Alterar imagem do grupo" aria-label="Alterar imagem do grupo">
-                <img id="grupo-destaque-img" class="group-avatar-img hidden" src="" alt="">
-                <span id="grupo-destaque-fallback" class="group-avatar-fallback" aria-hidden="true">👥</span>
-              </button>
-              <input type="file" id="input-imagem-grupo" accept="image/*" hidden>
-              <h2 id="grupo-destaque-nome" class="group-hero-name">Grupo Principal</h2>
-              <button type="button" id="btn-renomear-grupo" class="btn-icon-ghost" data-i18n-title="renameGroupTitle" title="Renomear grupo atual">✎</button>
-            </div>
-            <div class="group-switch-inline">
-              <select id="select-grupo" class="select-group-compact" aria-label="Selecionar grupo"></select>
-              <button type="button" id="btn-novo-grupo" class="btn-secondary-sm" data-i18n="newGroupBtn">+ Grupo</button>
-            </div>
-          </div>
+        <section class="card groups-section" style="margin-top: 14px;">
+          <div class="card-header-between" style="margin-bottom: 12px;">
+            <h2 data-i18n="backToGroupsBtn">Grupos</h2>
 
-          <!-- Menu de 3 tracinhos -->
-          <div class="menu-3dots-wrap" id="menu-3dots-wrap">
-            <button type="button" id="btn-menu-3dots" class="btn-3dots" aria-expanded="false" aria-label="Menu de opções" title="Opções">
-              <span></span>
-              <span></span>
-              <span></span>
-            </button>
-
-            <div id="dropdown-3dots" class="dropdown-3dots hidden">
-              <button type="button" id="btn-editar-meu-nome" class="dropdown-item">
+            <!-- Menu de 3 tracinhos da Tela Inicial -->
+            <div class="menu-3dots-wrap" id="menu-3dots-home-wrap">
+              <button type="button" id="btn-menu-3dots-home" class="btn-3dots" aria-expanded="false" aria-label="Menu inicial" title="Opções">
                 <span></span>
-                <span data-i18n="editMyNameBtn">Alterar meu nome</span>
+                <span></span>
+                <span></span>
               </button>
-              <button type="button" id="menu-copiar-codigo" class="dropdown-item">
-                <span>📋</span>
-                <span id="menu-codigo-label">Copiar código (<code id="menu-codigo-valor">---</code>)</span>
-              </button>
-              <button type="button" id="btn-entrar-codigo" class="dropdown-item">
-                <span>🔑</span>
-                <span data-i18n="codeBtn">Código</span>
-              </button>
-              <button type="button" id="btn-balanco-global" class="dropdown-item">
-                <span>🌐</span>
-                <span data-i18n="globalBalanceBtn">Balanço Global</span>
-              </button>
-              <button type="button" id="btn-exportar-json" class="dropdown-item">
-                <span>💾</span>
-                <span data-i18n="backupBtn">Backup</span>
-              </button>
-              <button type="button" id="btn-importar-splitwise" class="dropdown-item">
-                <span>📥</span>
-                <span data-i18n="importSplitwiseBtn">Importar do Splitwise</span>
-              </button>
-              <button type="button" id="btn-instalar-app" class="dropdown-item hidden">
-                <span>📲</span>
-                <span>Instalar aplicativo</span>
-              </button>
-              <label for="input-importar-json" class="dropdown-item">
-                <span>📂</span>
-                <span data-i18n="importBtn">Importar</span>
-              </label>
-              <input type="file" id="input-importar-json" accept=".json" hidden>
-              <div class="dropdown-divider"></div>
-              <button type="button" id="btn-excluir-grupo" class="dropdown-item danger">
-                <span>🚪</span>
-                <span data-i18n="leaveDeleteBtn">Sair/Excluir</span>
-              </button>
+
+              <div id="dropdown-3dots-home" class="dropdown-3dots hidden">
+                <button type="button" id="btn-entrar-codigo-home" class="dropdown-item">
+                  <span>🔑</span>
+                  <span data-i18n="codeBtn">Código</span>
+                </button>
+                <button type="button" id="btn-balanco-global-home" class="dropdown-item">
+                  <span>🌐</span>
+                  <span data-i18n="globalBalanceBtn">Balanço Global</span>
+                </button>
+                <label for="input-importar-json" class="dropdown-item">
+                  <span>📂</span>
+                  <span data-i18n="importBtn">Importar</span>
+                </label>
+                <button type="button" id="btn-instalar-app-home" class="dropdown-item hidden">
+                  <span>📲</span>
+                  <span>Instalar aplicativo</span>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- Participantes -->
-        <div class="participants-block">
-          <div class="participants-header">
-            <h3 data-i18n="sec1Title">Participantes do Grupo</h3>
-          </div>
-
-          <div class="invite-primary-row">
-            <button type="button" id="btn-compartilhar-grupo" class="btn-invite-link btn-invite-primary" data-i18n="inviteLinkBtn">🔗 + Adicionar / Enviar Link</button>
-          </div>
-
-          <div class="unlinked-toggle-row">
-            <button type="button" id="btn-toggle-sem-app" class="btn-ghost-discreet" data-i18n="addVirtualPersonBtn">+ Sem app</button>
-          </div>
-
-          <form id="form-pessoa" class="input-group-inline hidden">
-            <input type="text" id="nome-pessoa" data-i18n-placeholder="personPlaceholder" placeholder="Nome de quem não usa o app..." autocomplete="off">
-            <button type="submit" class="btn-secondary" data-i18n="addPersonConfirmBtn">Adicionar</button>
-          </form>
-
-          <div id="lista-pessoas" class="tags-container"></div>
-        </div>
+          <div id="lista-grupos" class="groups-list" role="listbox" aria-label="Grupos"></div>
+          <button type="button" id="btn-novo-grupo" class="btn-add-group" data-i18n="newGroupBtn">+ Grupo</button>
+        </section>
       </section>
 
-      <!-- Card: Saldos / Resumo e Acerto -->
-      <section class="card highlight-card">
-        <div class="card-header-between">
-          <h2 data-i18n="sec3Title">Resumo e Acerto</h2>
-          <div class="header-btns-row">
-            <button type="button" id="btn-abrir-quitar" class="btn-success-sm" data-i18n="settleBtn">💸 Quitar Conta</button>
-            <button type="button" id="btn-relatorio" class="btn-primary-sm" data-i18n="reportBtn">📄 Relatório</button>
-          </div>
+      <!-- ==================== TELA 2: DETALHES DO GRUPO ABERTO ==================== -->
+      <section id="view-detalhe-grupo" class="app-view hidden">
+        <div class="group-detail-topbar">
+          <button type="button" id="btn-voltar-grupos" class="btn-back-groups">
+            ← <span data-i18n="backToGroupsBtn">Grupos</span>
+          </button>
         </div>
 
-        <div id="meu-saldo-box" class="meu-saldo-box hidden"></div>
-
-        <div class="divider"></div>
-
-        <ul id="lista-acertos" class="acertos-list"></ul>
-      </section>
-
-      <!-- Histórico -->
-      <section class="card">
-        <div class="card-header-between">
-          <button type="button" id="btn-toggle-historico" class="btn-expand-section" data-i18n="viewHistorySimpleBtn">Ver histórico</button>
-          <span id="total-grupo-badge" class="total-badge">R$ 0,00</span>
-        </div>
-
-        <div id="container-historico" class="hidden" style="margin-top: 14px;">
-          <div class="filter-bar">
-            <div class="filter-bar-left">
-              <label for="filtro-categoria" data-i18n="filterLabel">Filtrar:</label>
-              <select id="filtro-categoria" class="select-sm"></select>
+        <!-- Cartão Principal do Grupo + Participantes -->
+        <section class="card group-bar-card">
+          <div class="group-hero-row">
+            <div class="group-hero-title-wrap">
+              <div class="group-title-line">
+                <button type="button" id="btn-imagem-grupo" class="group-avatar-btn" title="Alterar imagem do grupo" aria-label="Alterar imagem do grupo">
+                  <img id="grupo-destaque-img" class="group-avatar-img hidden" src="" alt="">
+                  <span id="grupo-destaque-fallback" class="group-avatar-fallback" aria-hidden="true">👥</span>
+                </button>
+                <input type="file" id="input-imagem-grupo" accept="image/*" hidden>
+                <h2 id="grupo-destaque-nome" class="group-hero-name">Grupo Principal</h2>
+                <button type="button" id="btn-renomear-grupo" class="btn-icon-ghost" data-i18n-title="renameGroupTitle" title="Renomear grupo atual">✎</button>
+              </div>
             </div>
-            <button type="button" id="btn-toggle-totais" class="btn-secondary-sm" data-i18n="totalsBtn">📊 Totais</button>
-          </div>
 
-          <div id="painel-totais" class="totais-panel hidden">
-            <div class="totais-header">
-              <h3 data-i18n="analyticalSummaryTitle">Resumo Analítico de Gastos</h3>
-              <span id="totais-filtro-info" class="totais-sub"></span>
+            <!-- Menu de 3 tracinhos (Ações do Grupo) -->
+            <div class="menu-3dots-wrap" id="menu-3dots-wrap">
+              <button type="button" id="btn-menu-3dots" class="btn-3dots" aria-expanded="false" aria-label="Menu de opções" title="Opções">
+                <span></span>
+                <span></span>
+                <span></span>
+              </button>
+
+              <div id="dropdown-3dots" class="dropdown-3dots hidden">
+                <button type="button" id="btn-editar-meu-nome" class="dropdown-item">
+                  <span></span>
+                  <span data-i18n="editMyNameBtn">Alterar meu nome</span>
+                </button>
+                <button type="button" id="menu-copiar-codigo" class="dropdown-item">
+                  <span>📋</span>
+                  <span id="menu-codigo-label">Copiar código (<code id="menu-codigo-valor">---</code>)</span>
+                </button>
+                <button type="button" id="btn-exportar-json" class="dropdown-item">
+                  <span>💾</span>
+                  <span data-i18n="backupBtn">Backup</span>
+                </button>
+                <button type="button" id="btn-importar-splitwise" class="dropdown-item">
+                  <span>📥</span>
+                  <span data-i18n="importSplitwiseBtn">Importar do Splitwise</span>
+                </button>
+                <div class="dropdown-divider"></div>
+                <button type="button" id="btn-excluir-grupo" class="dropdown-item danger">
+                  <span>🚪</span>
+                  <span data-i18n="leaveDeleteBtn">Sair/Excluir</span>
+                </button>
+              </div>
             </div>
-            <div id="totais-conteudo" class="totais-grid"></div>
           </div>
 
-          <ul id="lista-gastos" class="gastos-list"></ul>
-        </div>
+          <!-- Participantes -->
+          <div class="participants-block">
+            <div class="participants-header">
+              <h3 data-i18n="sec1Title">Participantes do Grupo</h3>
+            </div>
+
+            <div class="invite-primary-row">
+              <button type="button" id="btn-compartilhar-grupo" class="btn-invite-link btn-invite-primary" data-i18n="inviteLinkBtn">🔗 + Adicionar / Enviar Link</button>
+            </div>
+
+            <div class="unlinked-toggle-row">
+              <button type="button" id="btn-toggle-sem-app" class="btn-ghost-discreet" data-i18n="addVirtualPersonBtn">+ Sem app</button>
+            </div>
+
+            <form id="form-pessoa" class="input-group-inline hidden">
+              <input type="text" id="nome-pessoa" data-i18n-placeholder="personPlaceholder" placeholder="Nome de quem não usa o app..." autocomplete="off">
+              <button type="submit" class="btn-secondary" data-i18n="addPersonConfirmBtn">Adicionar</button>
+            </form>
+
+            <div id="lista-pessoas" class="tags-container"></div>
+          </div>
+        </section>
+
+        <!-- Card: Saldos / Resumo e Acerto -->
+        <section class="card highlight-card" style="margin-top: 18px;">
+          <div class="card-header-between">
+            <h2 data-i18n="sec3Title">Resumo e Acerto</h2>
+            <div class="header-btns-row">
+              <button type="button" id="btn-abrir-quitar" class="btn-success-sm" data-i18n="settleBtn">💸 Quitar Conta</button>
+              <button type="button" id="btn-relatorio" class="btn-primary-sm" data-i18n="reportBtn">📄 Relatório</button>
+            </div>
+          </div>
+
+          <div id="meu-saldo-box" class="meu-saldo-box hidden"></div>
+
+          <div class="divider"></div>
+
+          <ul id="lista-acertos" class="acertos-list"></ul>
+        </section>
+
+        <!-- Histórico -->
+        <section class="card" style="margin-top: 18px;">
+          <div class="card-header-between">
+            <button type="button" id="btn-toggle-historico" class="btn-expand-section" data-i18n="viewHistorySimpleBtn">Ver histórico</button>
+            <span id="total-grupo-badge" class="total-badge">R$ 0,00</span>
+          </div>
+
+          <div id="container-historico" class="hidden" style="margin-top: 14px;">
+            <div class="filter-bar">
+              <div class="filter-bar-left">
+                <label for="filtro-categoria" data-i18n="filterLabel">Filtrar:</label>
+                <select id="filtro-categoria" class="select-sm"></select>
+              </div>
+              <button type="button" id="btn-toggle-totais" class="btn-secondary-sm" data-i18n="totalsBtn">📊 Totais</button>
+            </div>
+
+            <div id="painel-totais" class="totais-panel hidden">
+              <div class="totais-header">
+                <h3 data-i18n="analyticalSummaryTitle">Resumo Analítico de Gastos</h3>
+                <span id="totais-filtro-info" class="totais-sub"></span>
+              </div>
+              <div id="totais-conteudo" class="totais-grid"></div>
+            </div>
+
+            <ul id="lista-gastos" class="gastos-list"></ul>
+          </div>
+        </section>
+
+        <!-- Botão Flutuante Novo Gasto -->
+        <button type="button" id="btn-fab-novo-gasto" class="fab-novo-gasto" aria-label="Novo Gasto">
+          <span class="fab-plus">+</span>
+          <span class="fab-label" data-i18n="addExpenseExpandBtn">Incluir Novo Gasto</span>
+        </button>
       </section>
+
+      <!-- Input oculto compartilhado para importar JSON -->
+      <input type="file" id="input-importar-json" accept=".json" hidden>
 
     </div>
-
-    <!-- Botão Flutuante Novo Gasto -->
-    <button type="button" id="btn-fab-novo-gasto" class="fab-novo-gasto" aria-label="Novo Gasto">
-      <span class="fab-plus">+</span>
-      <span class="fab-label" data-i18n="addExpenseExpandBtn">Incluir Novo Gasto</span>
-    </button>
 
     <!-- Modal de Novo Gasto / Edição -->
     <div id="modal-form-gasto" class="modal-gasto-overlay hidden">
@@ -529,7 +559,7 @@
     <button type="button" id="btn-toast-undo" class="toast-undo-btn" data-i18n="undoBtn">Desfazer</button>
   </div>
 
-  <script type="module" src="app.js?v=11"></script>
+  <script type="module" src="app.js?v=13"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

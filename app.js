@@ -43,6 +43,7 @@ const googleProvider = new GoogleAuthProvider();
 const STORAGE_KEY_LEGACY = 'raodev_split_v3_multi';
 const USER_NAME_STORAGE_KEY = 'raodev_split_user_name_v1';
 const ME_BY_GROUP_STORAGE_KEY = 'raodev_split_me_by_group_v1';
+const SPLITWISE_IMPORT_KEY = 'raodev_splitwise_pending_import';
 const DEFAULT_GROUP_ID = 'grp_padrao';
 
 const CATEGORIAS = [
@@ -118,6 +119,7 @@ let state = {
   grupos: {}
 };
 
+let telaAtiva = 'lista'; // 'lista' | 'detalhe'
 let modoDivisaoAtual = 'igual';
 let categoriaSelecionada = null;
 let categoriaDetectadaAuto = null;
@@ -126,8 +128,33 @@ let totaisAberto = false;
 let historicoAberto = false;
 let formGastoAberto = false;
 let menu3DotsAberto = false;
+let menuHome3DotsAberto = false;
 let dataGastoSelecionada = '';
 let undoPendente = null;
+
+// ==================== NAVEGAÇÃO ENTRE TELAS ====================
+function abrirTelaListaGrupos() {
+  telaAtiva = 'lista';
+  cancelarEdicao();
+  setFormGastoVisivel(false);
+  setMenu3DotsAberto(false);
+  setMenu3DotsHomeAberto(false);
+  document.getElementById('view-lista-grupos')?.classList.remove('hidden');
+  document.getElementById('view-detalhe-grupo')?.classList.add('hidden');
+  renderSeletorGrupos();
+  renderResumoGlobalUsuario();
+}
+
+function abrirTelaDetalheGrupo(groupId) {
+  if (groupId && state.grupos[groupId]) {
+    state.grupoAtivoId = groupId;
+  }
+  telaAtiva = 'detalhe';
+  setMenu3DotsHomeAberto(false);
+  document.getElementById('view-lista-grupos')?.classList.add('hidden');
+  document.getElementById('view-detalhe-grupo')?.classList.remove('hidden');
+  renderTudo();
+}
 
 // ==================== UTILITÁRIOS DE IDENTIDADE ("EU") ====================
 function salvarNomeUsuarioLocal(nome) {
@@ -330,7 +357,7 @@ function setSaveStatus(statusKey, extraVars = {}) {
   }
 }
 
-function comprimirImagemArquivo(file, maxSize = 180, quality = 0.72) {
+function comprimirImagemArquivo(file, maxSize = 260, quality = 0.78) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error('Falha ao ler o arquivo de imagem.'));
@@ -379,6 +406,21 @@ function parseNumeroFlexivel(v) {
     return Number.isFinite(n) ? n : 0;
   }
   return 0;
+}
+
+function extrairPartesPagamento(g) {
+  const de = g?.de ?? g?.from ?? g?.quemPagou ?? g?.origem ?? g?.pagador ?? '';
+
+  let para = g?.para ?? g?.to ?? g?.quemRecebeu ?? g?.recebedor ?? g?.destino ?? '';
+  if (!para && Array.isArray(g?.participantes) && g.participantes.length > 0) {
+    para = g.participantes[0];
+  }
+  if (!para && g?.divisao && typeof g.divisao === 'object') {
+    const chaves = Object.keys(g.divisao).filter(k => k !== de);
+    if (chaves.length > 0) para = chaves[0];
+  }
+
+  return { de: String(de || '').trim(), para: String(para || '').trim() };
 }
 
 function normalizarEstruturaGrupo(id, raw) {
@@ -937,7 +979,7 @@ async function processarConviteDaURL() {
       await vincularGrupoAoUsuario(currentUser.uid, cleanId, true);
       salvarEstadoLocal();
       assinarGrupoAtivo(cleanId);
-      renderTudo();
+      abrirTelaDetalheGrupo(cleanId);
     } else {
       alert(t('groupNotFoundAlert'));
     }
@@ -1070,7 +1112,7 @@ function traduzirErroAuth(err) {
     'auth/wrong-password': 'Senha incorreta.',
     'auth/invalid-credential': 'E-mail ou senha inválidos.',
     'auth/email-already-in-use': 'Este e-mail já está cadastrado.',
-    'auth/weak-password': 'A senha deve pelo menos 6 caracteres.',
+    'auth/weak-password': 'A senha deve ter pelo menos 6 caracteres.',
     'auth/popup-closed-by-user': 'Login cancelado antes de concluir.',
     'auth/network-request-failed': 'Erro de rede. Verifique sua conexão.'
   };
@@ -1237,13 +1279,23 @@ function initLanguageSwitcher() {
   });
 }
 
-// ==================== MENU 3 TRACINHOS ====================
+// ==================== MENUS DE 3 TRACINHOS ====================
 function setMenu3DotsAberto(aberto) {
   menu3DotsAberto = Boolean(aberto);
+  if (menu3DotsAberto) setMenu3DotsHomeAberto(false);
   const btn = document.getElementById('btn-menu-3dots');
   const drop = document.getElementById('dropdown-3dots');
   btn?.setAttribute('aria-expanded', String(menu3DotsAberto));
   drop?.classList.toggle('hidden', !menu3DotsAberto);
+}
+
+function setMenu3DotsHomeAberto(aberto) {
+  menuHome3DotsAberto = Boolean(aberto);
+  if (menuHome3DotsAberto) setMenu3DotsAberto(false);
+  const btn = document.getElementById('btn-menu-3dots-home');
+  const drop = document.getElementById('dropdown-3dots-home');
+  btn?.setAttribute('aria-expanded', String(menuHome3DotsAberto));
+  drop?.classList.toggle('hidden', !menuHome3DotsAberto);
 }
 
 // ==================== ACESSO E GERENCIAMENTO DE GRUPOS ====================
@@ -1261,17 +1313,72 @@ function getGrupoAtivo() {
   return state.grupos[state.grupoAtivoId];
 }
 
+function getTextoSaldoUsuarioNoGrupo(grupo) {
+  garantirUsuarioLogadoNoGrupo(grupo);
+  const meName = getMeParticipantName(grupo);
+  if (!meName) {
+    return { texto: t('myBalanceZero'), classe: 'neutro' };
+  }
+
+  const { stats } = calcularBalancoGrupo(grupo);
+  const meuSaldo = stats[meName]?.saldo || 0;
+
+  if (meuSaldo > 0.01) {
+    return {
+      texto: t('myBalanceReceiveTotal', { val: formatMoney(meuSaldo, 'BRL') }),
+      classe: 'positivo'
+    };
+  }
+  if (meuSaldo < -0.01) {
+    return {
+      texto: t('myBalancePayTotal', { val: formatMoney(Math.abs(meuSaldo), 'BRL') }),
+      classe: 'negativo'
+    };
+  }
+  return {
+    texto: t('myBalanceZero'),
+    classe: 'neutro'
+  };
+}
+
 function renderSeletorGrupos() {
   const grupo = getGrupoAtivo();
-  const select = document.getElementById('select-grupo');
-  if (select) {
-    select.innerHTML = '';
+  const listaEl = document.getElementById('lista-grupos');
+
+  if (listaEl) {
+    listaEl.innerHTML = '';
+
     Object.values(state.grupos).forEach(g => {
-      const opt = document.createElement('option');
-      opt.value = g.id;
-      opt.textContent = g.nome;
-      if (g.id === state.grupoAtivoId) opt.selected = true;
-      select.appendChild(opt);
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'group-list-item';
+      item.setAttribute('role', 'option');
+
+      const foto = g.image || g.photo || '';
+      const thumbHTML = foto
+        ? `<img src="${escapeHTML(foto)}" alt="${escapeHTML(g.nome)}">`
+        : `<span class="group-list-thumb-fallback">👥</span>`;
+
+      const { texto: saldoTexto, classe: saldoClasse } = getTextoSaldoUsuarioNoGrupo(g);
+
+      item.innerHTML = `
+        <span class="group-list-thumb">${thumbHTML}</span>
+        <span class="group-list-info">
+          <span class="group-list-name">${escapeHTML(g.nome)}</span>
+          <span class="group-list-balance ${saldoClasse}">${escapeHTML(saldoTexto)}</span>
+        </span>
+        <span class="group-list-chevron">›</span>
+      `;
+
+      item.addEventListener('click', async () => {
+        if (state.grupoAtivoId !== g.id) {
+          await trocarGrupoAtivo(g.id, { abrirDetalhe: true });
+        } else {
+          abrirTelaDetalheGrupo(g.id);
+        }
+      });
+
+      listaEl.appendChild(item);
     });
   }
 
@@ -1304,7 +1411,7 @@ function renderImagemGrupo(grupo) {
   }
 }
 
-async function trocarGrupoAtivo(novoId) {
+async function trocarGrupoAtivo(novoId, { abrirDetalhe = false } = {}) {
   if (!state.grupos[novoId]) return;
   state.grupoAtivoId = novoId;
   filtroCategoriaAtual = 'todas';
@@ -1314,7 +1421,11 @@ async function trocarGrupoAtivo(novoId) {
   if (currentUser) {
     await vincularGrupoAoUsuario(currentUser.uid, novoId, true);
   }
-  renderTudo();
+  if (abrirDetalhe || telaAtiva === 'detalhe') {
+    abrirTelaDetalheGrupo(novoId);
+  } else {
+    renderTudo();
+  }
 }
 
 async function criarNovoGrupo() {
@@ -1346,7 +1457,7 @@ async function criarNovoGrupo() {
     await vincularGrupoAoUsuario(currentUser.uid, id, true);
   }
   assinarGrupoAtivo(id);
-  renderTudo();
+  abrirTelaDetalheGrupo(id);
 }
 
 async function renomearGrupoAtual() {
@@ -1387,7 +1498,7 @@ async function excluirOuSairDoGrupo() {
     }
     salvarEstadoLocal();
     assinarGrupoAtivo(state.grupoAtivoId);
-    renderTudo();
+    abrirTelaListaGrupos();
   } else if (op === '2') {
     if (!confirm(t('deleteGroupConfirm', { name: grupo.nome }))) return;
     if (currentUser) {
@@ -1421,7 +1532,7 @@ async function excluirOuSairDoGrupo() {
     }
     salvarEstadoLocal();
     assinarGrupoAtivo(state.grupoAtivoId);
-    renderTudo();
+    abrirTelaListaGrupos();
   }
 }
 
@@ -1469,7 +1580,7 @@ async function entrarPorCodigoOuLink() {
     }
     salvarEstadoLocal();
     assinarGrupoAtivo(codigo);
-    renderTudo();
+    abrirTelaDetalheGrupo(codigo);
   } catch (e) {
     console.error('Erro ao entrar por código:', e);
     alert(t('groupNotFoundAlert'));
@@ -2166,8 +2277,8 @@ function calcularBalancoGrupo(grupo) {
 
     if (g.tipo === 'pagamento') {
       const { de: deRaw, para: paraRaw } = extrairPartesPagamento(g);
-      const chaveDe = acharChaveStats ? acharChaveStats(deRaw) : deRaw;
-      const chavePara = acharChaveStats ? acharChaveStats(paraRaw) : paraRaw;
+      const chaveDe = acharChaveStats(deRaw);
+      const chavePara = acharChaveStats(paraRaw);
 
       if (chaveDe && stats[chaveDe]) stats[chaveDe].acertosLiquidos += valBRL;
       if (chavePara && stats[chavePara]) stats[chavePara].acertosLiquidos -= valBRL;
@@ -2391,21 +2502,6 @@ function getLancamentosFiltrados(grupo) {
     return lista.filter(g => g.tipo !== 'pagamento' && (!g.categoria || g.categoria === 'Sem categoria'));
   }
   return lista.filter(g => g.tipo !== 'pagamento' && g.categoria === filtroCategoriaAtual);
-}
-
-function extrairPartesPagamento(g) {
-  const de = g?.de ?? g?.from ?? g?.quemPagou ?? g?.origem ?? g?.pagador ?? '';
-
-  let para = g?.para ?? g?.to ?? g?.quemRecebeu ?? g?.recebedor ?? g?.destino ?? '';
-  if (!para && Array.isArray(g?.participantes) && g.participantes.length > 0) {
-    para = g.participantes[0];
-  }
-  if (!para && g?.divisao && typeof g.divisao === 'object') {
-    const chaves = Object.keys(g.divisao).filter(k => k !== de);
-    if (chaves.length > 0) para = chaves[0];
-  }
-
-  return { de: String(de || '').trim(), para: String(para || '').trim() };
 }
 
 function renderHistorico() {
@@ -2893,7 +2989,7 @@ function abrirModalGlobal() {
   document.getElementById('modal-global')?.classList.remove('hidden');
 }
 
-// ==================== BACKUP E IMPORTAÇÃO JSON ====================
+// ==================== BACKUP E IMPORTAÇÃO (PADRÃO + SPLITWISE) ====================
 function exportarBackupJSON() {
   const payload = {
     app: 'SplitRAO',
@@ -2911,64 +3007,432 @@ function exportarBackupJSON() {
   URL.revokeObjectURL(url);
 }
 
-const SPLITWISE_IMPORT_KEY = 'raodev_splitwise_pending_import';
+function normalizarDataFlexivel(dataRaw) {
+  if (!dataRaw) return getTodayISO();
+  const s = String(dataRaw).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const isoMatch = s.match(/^(\d{4}-\d{2}-\d{2})[T\s]/);
+  if (isoMatch) return isoMatch[1];
+  const brMatch = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (brMatch) {
+    const d = brMatch[1].padStart(2, '0');
+    const m = brMatch[2].padStart(2, '0');
+    return `${brMatch[3]}-${m}-${d}`;
+  }
+  const dt = new Date(s);
+  if (!Number.isNaN(dt.getTime())) {
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, '0');
+    const d = String(dt.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return getTodayISO();
+}
 
-async function processarImportacaoPendenteSplitwise() {
-  const raw = localStorage.getItem(SPLITWISE_IMPORT_KEY);
-  if (!raw) return;
+function mapearCategoriaSplitwise(catRaw) {
+  const txt = normalizarTexto(catRaw);
+  if (!txt) return null;
+  if (txt.includes('rent') || txt.includes('aluguel') || txt.includes('home') || txt.includes('house') || txt.includes('utilit') || txt.includes('internet') || txt.includes('luz') || txt.includes('agua') || txt.includes('casa')) return 'Casa';
+  if (txt.includes('food') || txt.includes('grocer') || txt.includes('dining') || txt.includes('restaurant') || txt.includes('coffee') || txt.includes('liquor') || txt.includes('comida') || txt.includes('mercado') || txt.includes('bar')) return 'Comida';
+  if (txt.includes('gas') || txt.includes('fuel') || txt.includes('car') || txt.includes('park') || txt.includes('combust') || txt.includes('carro')) return 'Carro';
+  if (txt.includes('movie') || txt.includes('game') || txt.includes('music') || txt.includes('sport') || txt.includes('entertain') || txt.includes('lazer') || txt.includes('cinema')) return 'Entretenimento';
+  if (txt.includes('uber') || txt.includes('taxi') || txt.includes('bus') || txt.includes('train') || txt.includes('flight') || txt.includes('transport') || txt.includes('transporte')) return 'Transporte';
+  if (txt.includes('health') || txt.includes('medical') || txt.includes('doctor') || txt.includes('pharmacy') || txt.includes('vida') || txt.includes('saude')) return 'Vida';
+  return detectarCategoriaAutomatica(catRaw);
+}
 
-  localStorage.removeItem(SPLITWISE_IMPORT_KEY);
+function parseLinhaCSV(linha, separador) {
+  const cols = [];
+  let atual = '';
+  let entreAspas = false;
 
-  try {
-    const parsed = JSON.parse(raw);
-    const gruposFonte = parsed?.state?.grupos || parsed?.grupos;
-    if (!gruposFonte || typeof gruposFonte !== 'object') return;
-
-    let ultimoIdImportado = null;
-
-    for (const [, gdata] of Object.entries(gruposFonte)) {
-      if (!gdata || typeof gdata !== 'object') continue;
-      const gid = gerarId('grp');
-      const norm = normalizarEstruturaGrupo(gid, { ...gdata, id: gid });
-
-      state.grupos[gid] = norm;
-      cloudGroupsCache[gid] = norm;
-      ultimoIdImportado = gid;
-
-      if (currentUser) {
-        await setDoc(getGroupDocRef(gid), {
-          id: norm.id,
-          nome: norm.nome,
-          image: norm.image || null,
-          pessoas: norm.pessoas || [],
-          participantesSemApp: norm.participantesSemApp || [],
-          meuParticipante: norm.meuParticipante || null,
-          gastos: norm.gastos || [],
-          taxasCambio: norm.taxasCambio || {},
-          deleted: false,
-          [`members.${currentUser.uid}`]: true,
-          updatedAt: Date.now(),
-          updatedBy: currentUser.uid
-        }, { merge: true });
-
-        await vincularGrupoAoUsuario(currentUser.uid, gid, true);
+  for (let i = 0; i < linha.length; i++) {
+    const ch = linha[i];
+    if (ch === '"') {
+      if (entreAspas && linha[i + 1] === '"') {
+        atual += '"';
+        i++;
       } else {
-        await salvarGrupoNaNuvem(norm);
+        entreAspas = !entreAspas;
+      }
+    } else if (ch === separador && !entreAspas) {
+      cols.push(atual.trim());
+      atual = '';
+    } else {
+      atual += ch;
+    }
+  }
+  cols.push(atual.trim());
+  return cols;
+}
+
+function converterSplitwiseCSVParaGrupo(csvText, nomeArquivo = 'Splitwise') {
+  const linhas = String(csvText || '')
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(Boolean);
+
+  if (linhas.length < 2) return null;
+
+  const sep = (linhas[0].match(/;/g)?.length || 0) > (linhas[0].match(/,/g)?.length || 0) ? ';' : ',';
+  const cabecalho = parseLinhaCSV(linhas[0], sep).map(h => normalizarTexto(h));
+
+  const idxData = cabecalho.findIndex(h => h.includes('date') || h.includes('data'));
+  const idxDesc = cabecalho.findIndex(h => h.includes('description') || h.includes('descri'));
+  const idxCat = cabecalho.findIndex(h => h.includes('category') || h.includes('categori'));
+  const idxCost = cabecalho.findIndex(h => h.includes('cost') || h.includes('valor') || h.includes('amount'));
+  const idxCurr = cabecalho.findIndex(h => h.includes('currency') || h.includes('moeda'));
+
+  const pessoasSet = new Set();
+  const colPessoas = [];
+
+  cabecalho.forEach((colNome, idx) => {
+    if (idx === idxData || idx === idxDesc || idx === idxCat || idx === idxCost || idx === idxCurr) return;
+    if (!colNome || colNome.includes('total') || colNome.includes('balance') || colNome.includes('saldo')) return;
+    const originalHeader = parseLinhaCSV(linhas[0], sep)[idx]?.trim();
+    if (originalHeader) {
+      pessoasSet.add(originalHeader);
+      colPessoas.push({ idx, nome: originalHeader });
+    }
+  });
+
+  const gastos = [];
+
+  for (let i = 1; i < linhas.length; i++) {
+    const cols = parseLinhaCSV(linhas[i], sep);
+    const desc = (idxDesc >= 0 ? cols[idxDesc] : '') || '';
+    const descNorm = normalizarTexto(desc);
+
+    if (!desc || descNorm === 'total balance' || descNorm === 'saldo total') continue;
+
+    const data = normalizarDataFlexivel(idxData >= 0 ? cols[idxData] : '');
+    const moedaRaw = idxCurr >= 0 ? String(cols[idxCurr] || '').trim().toUpperCase() : 'BRL';
+    const moeda = MOEDAS[moedaRaw] ? moedaRaw : 'BRL';
+
+    const deltas = {};
+    let totalPositivo = 0;
+
+    for (const cp of colPessoas) {
+      const val = parseNumeroFlexivel(cols[cp.idx]);
+      if (Math.abs(val) > 0.001) {
+        deltas[cp.nome] = val;
+        if (val > 0) totalPositivo += val;
       }
     }
 
-    if (ultimoIdImportado) {
-      state.grupoAtivoId = ultimoIdImportado;
-      filtroCategoriaAtual = 'todas';
-      cancelarEdicao();
-      salvarEstadoLocal();
-      if (currentUser) assinarGrupoAtivo(ultimoIdImportado);
-      renderTudo();
+    const custoInformado = Math.abs(parseNumeroFlexivel(idxCost >= 0 ? cols[idxCost] : 0));
+    const valorTotal = custoInformado > 0 ? custoInformado : totalPositivo;
+    if (!(valorTotal > 0)) continue;
+
+    const isPayment =
+      descNorm.includes('payment') ||
+      descNorm.includes('settle') ||
+      descNorm.includes('pagamento') ||
+      descNorm.includes('acerto');
+
+    const quemPagou = Object.entries(deltas).sort((a, b) => b[1] - a[1])[0]?.[0] || Array.from(pessoasSet)[0] || 'Participante';
+    const quemRecebeu = Object.entries(deltas).sort((a, b) => a[1] - b[1])[0]?.[0] || '';
+
+    if (isPayment && quemPagou && quemRecebeu && quemPagou !== quemRecebeu) {
+      gastos.push({
+        id: gerarId('pgt'),
+        tipo: 'pagamento',
+        de: quemPagou,
+        para: quemRecebeu,
+        valor: valorTotal,
+        moeda,
+        taxaCambio: 1,
+        valorBRL: valorTotal,
+        data,
+        descricao: desc
+      });
+    } else {
+      const divisao = {};
+      const devedoresCol = Object.entries(deltas).filter(([, v]) => v < -0.001);
+      if (devedoresCol.length > 0) {
+        devedoresCol.forEach(([nomeP, v]) => {
+          divisao[nomeP] = Math.abs(v);
+        });
+      } else {
+        const listaP = Array.from(pessoasSet);
+        const parcela = listaP.length > 0 ? valorTotal / listaP.length : valorTotal;
+        listaP.forEach(p => { divisao[p] = parcela; });
+      }
+
+      const catRaw = idxCat >= 0 ? cols[idxCat] : '';
+      const categoria = mapearCategoriaSplitwise(catRaw) || detectarCategoriaAutomatica(desc);
+
+      gastos.push({
+        id: gerarId('gst'),
+        tipo: 'despesa',
+        descricao: desc,
+        categoria,
+        data,
+        valor: valorTotal,
+        moeda,
+        taxaCambio: 1,
+        valorBRL: valorTotal,
+        pagador: quemPagou,
+        modoDivisao: devedoresCol.length > 0 ? 'exato' : 'igual',
+        divisao,
+        participantes: Object.keys(divisao)
+      });
     }
-  } catch (e) {
-    console.error('Erro ao importar grupo do Splitwise:', e);
-    setSaveStatus('statusSaveError');
   }
+
+  const nomeBase = nomeArquivo.replace(/\.csv$/i, '').trim() || 'Grupo Splitwise';
+  return {
+    id: gerarId('grp'),
+    nome: nomeBase,
+    pessoas: Array.from(pessoasSet),
+    gastos
+  };
+}
+
+function converterSplitwiseJSONParaGrupos(parsed) {
+  if (!parsed || typeof parsed !== 'object') return [];
+
+  // Exportação no formato de despesas brutas do Splitwise: { expenses: [ ... ] } ou { items: [ ... ] }
+  const listaDespesas = Array.isArray(parsed.expenses)
+    ? parsed.expenses
+    : (Array.isArray(parsed.items) ? parsed.items : null);
+
+  if (listaDespesas) {
+    const pessoasSet = new Set();
+    const gastos = [];
+
+    for (const exp of listaDespesas) {
+      if (!exp || typeof exp !== 'object') continue;
+      if (exp.deleted_at) continue;
+
+      const desc = String(exp.description || exp.name || exp.title || 'Despesa Splitwise').trim();
+      const data = normalizarDataFlexivel(exp.date || exp.created_at || exp.updated_at);
+      const moedaRaw = String(exp.currency_code || exp.currency || 'BRL').trim().toUpperCase();
+      const moeda = MOEDAS[moedaRaw] ? moedaRaw : 'BRL';
+      const valorTotal = Math.abs(parseNumeroFlexivel(exp.cost ?? exp.amount ?? exp.total ?? 0));
+
+      const users = Array.isArray(exp.users) ? exp.users : (Array.isArray(exp.repayments) ? exp.repayments : []);
+      let pagador = '';
+      let recebedor = '';
+      const divisao = {};
+
+      for (const u of users) {
+        const objUser = u?.user && typeof u.user === 'object' ? u.user : u;
+        const nomeP = [objUser?.first_name, objUser?.last_name].filter(Boolean).join(' ').trim()
+          || objUser?.name
+          || u?.name
+          || u?.from
+          || '';
+        if (!nomeP) continue;
+        pessoasSet.add(nomeP);
+
+        const paidShare = parseNumeroFlexivel(u?.paid_share ?? objUser?.paid_share ?? u?.paid ?? 0);
+        const owedShare = parseNumeroFlexivel(u?.owed_share ?? objUser?.owed_share ?? u?.owed ?? 0);
+
+        if (paidShare > 0.001) {
+          pagador = nomeP;
+        }
+        if (owedShare > 0.001) {
+          divisao[nomeP] = owedShare;
+          if (!recebedor && nomeP !== pagador) recebedor = nomeP;
+        }
+      }
+
+      if (!pagador) {
+        pagador = exp.created_by?.first_name || exp.payer || Array.from(pessoasSet)[0] || 'Participante';
+        if (pagador) pessoasSet.add(pagador);
+      }
+
+      const valorEfetivo = valorTotal > 0
+        ? valorTotal
+        : Object.values(divisao).reduce((a, b) => a + b, 0);
+
+      if (!(valorEfetivo > 0)) continue;
+
+      const isPayment = Boolean(exp.payment) || normalizarTexto(desc).includes('payment') || normalizarTexto(desc).includes('pagamento');
+
+      if (isPayment && pagador && recebedor && pagador !== recebedor) {
+        gastos.push({
+          id: gerarId('pgt'),
+          tipo: 'pagamento',
+          de: pagador,
+          para: recebedor,
+          valor: valorEfetivo,
+          moeda,
+          taxaCambio: 1,
+          valorBRL: valorEfetivo,
+          data,
+          descricao: desc
+        });
+      } else {
+        const chavesDiv = Object.keys(divisao);
+        if (chavesDiv.length === 0 && pessoasSet.size > 0) {
+          const listaP = Array.from(pessoasSet);
+          const parcela = valorEfetivo / listaP.length;
+          listaP.forEach(p => { divisao[p] = parcela; });
+        }
+
+        const catNome = exp.category?.name || exp.category || '';
+        const categoria = mapearCategoriaSplitwise(catNome) || detectarCategoriaAutomatica(desc);
+
+        gastos.push({
+          id: gerarId('gst'),
+          tipo: 'despesa',
+          descricao: desc,
+          categoria,
+          data,
+          valor: valorEfetivo,
+          moeda,
+          taxaCambio: 1,
+          valorBRL: valorEfetivo,
+          pagador,
+          modoDivisao: 'exato',
+          divisao,
+          participantes: Object.keys(divisao)
+        });
+      }
+    }
+
+    const nomeGrupo = parsed.group?.name || parsed.group_name || 'Grupo Splitwise';
+    return [{
+      chaveOriginal: parsed.group?.id ? `sw_${parsed.group.id}` : gerarId('grp'),
+      gdata: {
+        id: gerarId('grp'),
+        nome: nomeGrupo,
+        pessoas: Array.from(pessoasSet),
+        gastos
+      }
+    }];
+  }
+
+  // Exportação no formato de grupos do Splitwise: { groups: [ { name, members, expenses } ] }
+  if (Array.isArray(parsed.groups)) {
+    const saida = [];
+    for (const grp of parsed.groups) {
+      if (!grp || typeof grp !== 'object') continue;
+      const nomeG = grp.name || grp.nome || 'Grupo Splitwise';
+      const membros = Array.isArray(grp.members)
+        ? grp.members.map(m => [m?.first_name, m?.last_name].filter(Boolean).join(' ').trim() || m?.name || String(m || '').trim()).filter(Boolean)
+        : [];
+      const convertido = converterSplitwiseJSONParaGrupos({
+        expenses: grp.expenses || grp.gastos || [],
+        group: { name: nomeG, id: grp.id }
+      });
+      if (convertido[0]) {
+        const gObj = convertido[0].gdata;
+        gObj.pessoas = Array.from(new Set([...membros, ...(gObj.pessoas || [])]));
+        saida.push({ chaveOriginal: gObj.id, gdata: gObj });
+      }
+    }
+    return saida;
+  }
+
+  return [];
+}
+
+function extrairGruposDeJSON(parsed) {
+  if (!parsed || typeof parsed !== 'object') return [];
+
+  // 1. Formato nativo com "grupos" como ARRAY (ex: sitio.json) ou OBJETO
+  const gruposFonte = parsed?.state?.grupos ?? parsed?.grupos;
+  if (Array.isArray(gruposFonte)) {
+    return gruposFonte
+      .filter(item => item && typeof item === 'object')
+      .map(item => ({ chaveOriginal: item.id || '', gdata: item }));
+  }
+  if (gruposFonte && typeof gruposFonte === 'object') {
+    return Object.entries(gruposFonte).map(([chave, gdata]) => ({
+      chaveOriginal: chave,
+      gdata
+    }));
+  }
+
+  // 2. Array de grupos na raiz
+  if (Array.isArray(parsed)) {
+    return parsed
+      .filter(item => item && typeof item === 'object')
+      .map(item => ({ chaveOriginal: item.id || '', gdata: item }));
+  }
+
+  // 3. Formatos de exportação do Splitwise (JSON)
+  const gruposSplitwise = converterSplitwiseJSONParaGrupos(parsed);
+  if (gruposSplitwise.length > 0) {
+    return gruposSplitwise;
+  }
+
+  // 4. Objeto wrapper { grupo: { ... } }
+  if (parsed.grupo && typeof parsed.grupo === 'object') {
+    return [{ chaveOriginal: parsed.grupo.id || '', gdata: parsed.grupo }];
+  }
+
+  // 5. Objeto de um único grupo direto
+  if (typeof parsed.nome === 'string' || Array.isArray(parsed.pessoas) || Array.isArray(parsed.gastos)) {
+    return [{ chaveOriginal: parsed.id || '', gdata: parsed }];
+  }
+
+  return [];
+}
+
+async function persistirGruposImportados(entradas) {
+  if (!Array.isArray(entradas) || entradas.length === 0) return null;
+
+  let primeiroIdNovo = null;
+
+  for (const { chaveOriginal, gdata } of entradas) {
+    if (!gdata || typeof gdata !== 'object') continue;
+
+    const idCandidato = (typeof gdata.id === 'string' && gdata.id.trim())
+      ? gdata.id.trim()
+      : (typeof chaveOriginal === 'string' && chaveOriginal.trim() ? chaveOriginal.trim() : gerarId('grp'));
+
+    // Se já existir um grupo com o mesmo ID, cria um novo ID para não colidir
+    const gid = state.grupos[idCandidato] ? gerarId('grp') : idCandidato;
+
+    const norm = normalizarEstruturaGrupo(gid, { ...gdata, id: gid });
+    state.grupos[gid] = norm;
+    cloudGroupsCache[gid] = norm;
+
+    if (!primeiroIdNovo) primeiroIdNovo = gid;
+
+    if (currentUser) {
+      await setDoc(getGroupDocRef(gid), {
+        id: norm.id,
+        nome: norm.nome,
+        image: norm.image || null,
+        pessoas: norm.pessoas || [],
+        participantesSemApp: norm.participantesSemApp || [],
+        meuParticipante: norm.meuParticipante || null,
+        gastos: norm.gastos || [],
+        taxasCambio: norm.taxasCambio || {},
+        deleted: false,
+        members: { [currentUser.uid]: true },
+        updatedAt: Date.now(),
+        updatedBy: currentUser.uid
+      }, { merge: true });
+
+      await vincularGrupoAoUsuario(currentUser.uid, gid, gid === primeiroIdNovo);
+    } else {
+      salvarEstadoLocal();
+    }
+  }
+
+  if (primeiroIdNovo) {
+    state.grupoAtivoId = primeiroIdNovo;
+    filtroCategoriaAtual = 'todas';
+    cancelarEdicao();
+    salvarEstadoLocal();
+
+    if (currentUser) {
+      assinarGrupoAtivo(primeiroIdNovo);
+      const agora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      setSaveStatus('statusSyncedAt', { time: agora });
+    }
+
+    // Abre o grupo importado diretamente para você ver na tela
+    abrirTelaDetalheGrupo(primeiroIdNovo);
+  }
+
+  return primeiroIdNovo;
 }
 
 async function importarBackupJSON(file) {
@@ -2978,68 +3442,61 @@ async function importarBackupJSON(file) {
 
   try {
     const text = await file.text();
-    const parsed = JSON.parse(text);
-    const gruposFonte = parsed?.state?.grupos || parsed?.grupos;
-    if (!gruposFonte || typeof gruposFonte !== 'object') return;
+    const isCSV = /\.csv$/i.test(file.name) || (
+      !text.trim().startsWith('{') &&
+      !text.trim().startsWith('[') &&
+      text.includes(',')
+    );
 
-    let primeiroIdNovo = null;
-
-    for (const [chaveOriginal, gdata] of Object.entries(gruposFonte)) {
-      if (!gdata || typeof gdata !== 'object') continue;
-
-      const idCandidato = (typeof gdata.id === 'string' && gdata.id.trim())
-        ? gdata.id.trim()
-        : (typeof chaveOriginal === 'string' && chaveOriginal.trim() ? chaveOriginal.trim() : gerarId('grp'));
-
-      const gid = state.grupos[idCandidato] ? gerarId('grp') : idCandidato;
-
-      const norm = normalizarEstruturaGrupo(gid, { ...gdata, id: gid });
-      state.grupos[gid] = norm;
-      cloudGroupsCache[gid] = norm;
-
-      if (!primeiroIdNovo) primeiroIdNovo = gid;
-
-      if (currentUser) {
-        await setDoc(getGroupDocRef(gid), {
-          id: norm.id,
-          nome: norm.nome,
-          image: norm.image || null,
-          pessoas: norm.pessoas || [],
-          participantesSemApp: norm.participantesSemApp || [],
-          meuParticipante: norm.meuParticipante || null,
-          gastos: norm.gastos || [],
-          taxasCambio: norm.taxasCambio || {},
-          deleted: false,
-          [`members.${currentUser.uid}`]: true,
-          updatedAt: Date.now(),
-          updatedBy: currentUser.uid
-        }, { merge: true });
-
-        await vincularGrupoAoUsuario(currentUser.uid, gid, gid === primeiroIdNovo);
-      } else {
-        await salvarGrupoNaNuvem(norm);
+    let entradas = [];
+    if (isCSV) {
+      const grupoCSV = converterSplitwiseCSVParaGrupo(text, file.name);
+      if (grupoCSV) {
+        entradas = [{ chaveOriginal: grupoCSV.id, gdata: grupoCSV }];
       }
+    } else {
+      const parsed = JSON.parse(text);
+      entradas = extrairGruposDeJSON(parsed);
     }
 
-    if (primeiroIdNovo) {
-      state.grupoAtivoId = primeiroIdNovo;
-      filtroCategoriaAtual = 'todas';
-      cancelarEdicao();
-      salvarEstadoLocal();
-      if (currentUser) {
-        assinarGrupoAtivo(primeiroIdNovo);
-        const agora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        setSaveStatus('statusSyncedAt', { time: agora });
-      }
-      renderTudo();
+    if (entradas.length === 0) {
+      setSaveStatus('statusSaveError');
+      alert('Não foi possível reconhecer nenhum grupo válido neste arquivo.');
+      return;
+    }
+
+    const importadoId = await persistirGruposImportados(entradas);
+    if (!importadoId) {
+      setSaveStatus('statusSaveError');
+      alert('Falha ao importar os grupos do arquivo.');
     }
   } catch (e) {
-    console.error('Erro ao importar JSON:', e);
+    console.error('Erro ao importar arquivo:', e);
     setSaveStatus('statusSaveError');
+    alert(`Erro ao importar arquivo: ${e?.message || 'formato inválido ou sem permissão na nuvem'}`);
   } finally {
     setTimeout(() => {
       isSavingCloud = false;
-    }, 300);
+    }, 400);
+  }
+}
+async function processarImportacaoPendenteSplitwise() {
+  const raw = localStorage.getItem(SPLITWISE_IMPORT_KEY);
+  if (!raw) return;
+
+  localStorage.removeItem(SPLITWISE_IMPORT_KEY);
+  isSavingCloud = true;
+  setSaveStatus('statusSaving');
+
+  try {
+    const parsed = JSON.parse(raw);
+    const entradas = extrairGruposDeJSON(parsed);
+    await persistirGruposImportados(entradas);
+  } catch (e) {
+    console.error('Erro ao importar grupo pendente do Splitwise:', e);
+    setSaveStatus('statusSaveError');
+  } finally {
+    isSavingCloud = false;
   }
 }
 
@@ -3109,17 +3566,30 @@ function renderTudo() {
 
 // ==================== EVENT LISTENERS ====================
 function initListeners() {
+  document.getElementById('btn-voltar-grupos')?.addEventListener('click', abrirTelaListaGrupos);
+
+  // Menu de 3 tracinhos (Dentro do Grupo)
   document.getElementById('btn-menu-3dots')?.addEventListener('click', (e) => {
     e.stopPropagation();
     setMenu3DotsAberto(!menu3DotsAberto);
   });
 
-  document.getElementById('btn-fechar-form-gasto')?.addEventListener('click', () => {
-    setFormGastoVisivel(false);
-  });
-
   document.getElementById('dropdown-3dots')?.addEventListener('click', (e) => {
     e.stopPropagation();
+  });
+
+  // Menu de 3 tracinhos (Tela Inicial / Lista de Grupos)
+  document.getElementById('btn-menu-3dots-home')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setMenu3DotsHomeAberto(!menuHome3DotsAberto);
+  });
+
+  document.getElementById('dropdown-3dots-home')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+  });
+
+  document.getElementById('btn-fechar-form-gasto')?.addEventListener('click', () => {
+    setFormGastoVisivel(false);
   });
 
   document.getElementById('btn-toggle-sem-app')?.addEventListener('click', () => {
@@ -3133,9 +3603,9 @@ function initListeners() {
 
   document.addEventListener('click', () => {
     if (menu3DotsAberto) setMenu3DotsAberto(false);
+    if (menuHome3DotsAberto) setMenu3DotsHomeAberto(false);
   });
 
-  document.getElementById('select-grupo')?.addEventListener('change', (e) => trocarGrupoAtivo(e.target.value));
   document.getElementById('btn-novo-grupo')?.addEventListener('click', criarNovoGrupo);
   document.getElementById('btn-renomear-grupo')?.addEventListener('click', renomearGrupoAtual);
 
@@ -3152,12 +3622,13 @@ function initListeners() {
     if (!file) return;
 
     try {
-      const base64Img = await comprimirImagemArquivo(file, 180, 0.72);
+      const base64Img = await comprimirImagemArquivo(file, 260, 0.78);
       const grupoAtual = getGrupoAtivo();
       if (!grupoAtual) return;
 
       grupoAtual.image = base64Img;
       renderImagemGrupo(grupoAtual);
+      renderSeletorGrupos();
       await salvarGrupoNaNuvem(grupoAtual);
     } catch (err) {
       console.error('Erro ao processar imagem do grupo:', err);
@@ -3191,10 +3662,13 @@ function initListeners() {
 
   document.getElementById('btn-compartilhar-grupo')?.addEventListener('click', compartilharConviteGrupo);
 
-  document.getElementById('btn-entrar-codigo')?.addEventListener('click', async () => {
+  const acionarEntrarCodigo = async () => {
     setMenu3DotsAberto(false);
+    setMenu3DotsHomeAberto(false);
     await entrarPorCodigoOuLink();
-  });
+  };
+  document.getElementById('btn-entrar-codigo')?.addEventListener('click', acionarEntrarCodigo);
+  document.getElementById('btn-entrar-codigo-home')?.addEventListener('click', acionarEntrarCodigo);
 
   document.getElementById('menu-copiar-codigo')?.addEventListener('click', async () => {
     const id = state.grupoAtivoId;
@@ -3220,6 +3694,7 @@ function initListeners() {
 
   document.getElementById('input-importar-json')?.addEventListener('change', (e) => {
     setMenu3DotsAberto(false);
+    setMenu3DotsHomeAberto(false);
     if (e.target.files?.[0]) importarBackupJSON(e.target.files[0]);
     e.target.value = '';
   });
@@ -3445,10 +3920,14 @@ function initListeners() {
   });
   document.getElementById('btn-imprimir')?.addEventListener('click', () => window.print());
 
-  document.getElementById('btn-balanco-global')?.addEventListener('click', () => {
+  const acionarBalancoGlobal = () => {
     setMenu3DotsAberto(false);
+    setMenu3DotsHomeAberto(false);
     abrirModalGlobal();
-  });
+  };
+  document.getElementById('btn-balanco-global')?.addEventListener('click', acionarBalancoGlobal);
+  document.getElementById('btn-balanco-global-home')?.addEventListener('click', acionarBalancoGlobal);
+
   document.getElementById('btn-fechar-global')?.addEventListener('click', () => {
     document.getElementById('modal-global')?.classList.add('hidden');
   });
@@ -3490,7 +3969,7 @@ function initListeners() {
     const jaInstalado = isAppStandalone();
     const deveMostrar = !jaInstalado;
 
-    ['btn-instalar-app', 'btn-instalar-app-gate'].forEach(id => {
+    ['btn-instalar-app', 'btn-instalar-app-home', 'btn-instalar-app-gate'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.classList.toggle('hidden', !deveMostrar);
     });
@@ -3508,7 +3987,8 @@ function initListeners() {
   });
 
   async function acionarInstalacaoApp() {
-    if (typeof setMenu3DotsAberto === 'function') setMenu3DotsAberto(false);
+    setMenu3DotsAberto(false);
+    setMenu3DotsHomeAberto(false);
 
     if (deferredInstallPrompt) {
       deferredInstallPrompt.prompt();
@@ -3531,6 +4011,7 @@ function initListeners() {
 
   sincronizarBotoesInstalar();
   document.getElementById('btn-instalar-app')?.addEventListener('click', acionarInstalacaoApp);
+  document.getElementById('btn-instalar-app-home')?.addEventListener('click', acionarInstalacaoApp);
   document.getElementById('btn-instalar-app-gate')?.addEventListener('click', acionarInstalacaoApp);
 }
 
