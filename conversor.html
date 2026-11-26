@@ -232,8 +232,7 @@
         const quemDeve = pessoas.filter(p => saldos[p] < -0.005);
 
         const ehPagamento = normalizarTexto(categoriaRaw).includes('pagamento') ||
-          normalizarTexto(categoriaRaw).includes('payment') ||
-          (quemRecebe.length === 1 && quemDeve.length === 1 && Math.abs(saldos[quemRecebe[0]] - valor) < 0.02);
+          normalizarTexto(categoriaRaw).includes('payment');
 
         if (ehPagamento && quemRecebe.length === 1 && quemDeve.length === 1) {
           lancamentos.push({
@@ -242,8 +241,8 @@
             data: dataBr,
             descricao,
             valor,
-            deOrig: quemDeve[0],
-            paraOrig: quemRecebe[0]
+            deOrig: quemRecebe[0],
+            paraOrig: quemDeve[0]
           });
           continue;
         }
