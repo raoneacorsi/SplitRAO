@@ -155,7 +155,67 @@ function abrirTelaDetalheGrupo(groupId) {
   document.getElementById('view-detalhe-grupo')?.classList.remove('hidden');
   renderTudo();
 }
+function abrirFormularioDeNovoGasto() {
+  cancelarEdicao();
+  setFormGastoVisivel(true);
+  renderPagadorSelect();
+  renderAreaDivisao();
+}
 
+async function aoClicarNovoGastoNaHome() {
+  const gruposAtivos = Object.values(state.grupos || {}).filter(g => g && !g.deleted);
+
+  if (gruposAtivos.length === 0) {
+    await criarNovoGrupo();
+    const grupoCriado = getGrupoAtivo();
+    if (grupoCriado) {
+      abrirTelaDetalheGrupo(grupoCriado.id);
+      abrirFormularioDeNovoGasto();
+    }
+    return;
+  }
+
+  const opcoes = gruposAtivos
+    .map((g, idx) => `${idx + 1} - ${g.nome}`)
+    .join('\n');
+
+  const escolha = prompt(
+    `Escolha o grupo para o novo gasto (ou digite "novo" para criar um):\n\n${opcoes}\n\nDigite "novo" para criar grupo:`
+  );
+
+  if (escolha === null) return;
+
+  const limpo = escolha.trim().toLowerCase();
+
+  if (limpo === 'novo' || limpo === '+') {
+    await criarNovoGrupo();
+    const grupoCriado = getGrupoAtivo();
+    if (grupoCriado) {
+      abrirTelaDetalheGrupo(grupoCriado.id);
+      abrirFormularioDeNovoGasto();
+    }
+    return;
+  }
+
+  const indice = parseInt(limpo, 10) - 1;
+  const grupoEscolhido =
+    (!Number.isNaN(indice) && gruposAtivos[indice]) ||
+    gruposAtivos.find(g => g.nome.toLowerCase().includes(limpo));
+
+  if (!grupoEscolhido) {
+    alert('Grupo não encontrado. Tente novamente ou digite "novo".');
+    return;
+  }
+
+  state.grupoAtivoId = grupoEscolhido.id;
+  salvarEstadoLocal();
+  if (currentUser) {
+    vincularGrupoAoUsuario(currentUser.uid, grupoEscolhido.id, true).catch(() => {});
+  }
+
+  abrirTelaDetalheGrupo(grupoEscolhido.id);
+  abrirFormularioDeNovoGasto();
+}
 // ==================== UTILITÁRIOS DE IDENTIDADE ("EU") ====================
 function salvarNomeUsuarioLocal(nome) {
   const limpo = String(nome || '').trim();
@@ -4014,7 +4074,9 @@ function initListeners() {
   document.getElementById('btn-instalar-app-home')?.addEventListener('click', acionarInstalacaoApp);
   document.getElementById('btn-instalar-app-gate')?.addEventListener('click', acionarInstalacaoApp);
 }
-
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('btn-novo-gasto-home')?.addEventListener('click', aoClicarNovoGastoNaHome);
+});
 // ==================== BOOT ====================
 state = carregarEstadoLocal();
 dataGastoSelecionada = getTodayISO();

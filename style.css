@@ -1918,3 +1918,46 @@ select:focus {
     display: none !important;
   }
 }
+.fab-novo-gasto-home {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(calc(min(100vw - 28px, 680px) / 2 - 100%));
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+  color: #ffffff;
+  border: none;
+  border-radius: 18px;
+  padding: 18px 28px;
+  min-height: 62px;
+  font-size: 1.12rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  box-shadow: 0 12px 28px rgba(2, 132, 199, 0.4);
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+  font-family: inherit;
+}
+
+.fab-novo-gasto-home:hover {
+  transform: translateX(calc(min(100vw - 28px, 680px) / 2 - 100%)) translateY(-2px);
+  box-shadow: 0 14px 32px rgba(2, 132, 199, 0.48);
+}
+
+.fab-novo-gasto-home:active {
+  transform: translateX(calc(min(100vw - 28px, 680px) / 2 - 100%)) translateY(0);
+}
+
+@media (max-width: 520px) {
+  .fab-novo-gasto-home {
+    bottom: 18px;
+    padding: 16px 24px;
+    min-height: 58px;
+    font-size: 1.05rem;
+    border-radius: 16px;
+  }
+}
