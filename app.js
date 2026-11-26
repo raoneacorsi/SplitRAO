@@ -3630,6 +3630,11 @@ function renderTudo() {
 
 // ==================== EVENT LISTENERS ====================
 function initListeners() {
+  document.getElementById('btn-novo-gasto-grupo')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  abrirFormularioDeNovoGasto();
+});
   document.getElementById('btn-voltar-grupos')?.addEventListener('click', abrirTelaListaGrupos);
 
   // Menu de 3 tracinhos (Dentro do Grupo)

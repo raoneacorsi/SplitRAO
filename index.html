@@ -124,11 +124,12 @@
           <div id="lista-grupos" class="groups-list" role="listbox" aria-label="Grupos"></div>
           <button type="button" id="btn-novo-grupo" class="btn-add-group" data-i18n="newGroupBtn">+ Grupo</button>
         </section>
+
+        <!-- Botão Flutuante Novo Gasto (Tela Inicial) -->
         <button type="button" id="btn-novo-gasto-home" class="fab-novo-gasto-home">
-    <span class="fab-plus">+</span>
-    <span data-i18n="addExpenseExpandBtn">Adicionar novo gasto</span>
-  </button>
-</section>
+          <span class="fab-plus">+</span>
+          <span data-i18n="addExpenseExpandBtn">Incluir Novo Gasto</span>
+        </button>
       </section>
 
       <!-- ==================== TELA 2: DETALHES DO GRUPO ABERTO ==================== -->
@@ -164,7 +165,7 @@
 
               <div id="dropdown-3dots" class="dropdown-3dots hidden">
                 <button type="button" id="btn-editar-meu-nome" class="dropdown-item">
-                  <span></span>
+                  <span>✏️</span>
                   <span data-i18n="editMyNameBtn">Alterar meu nome</span>
                 </button>
                 <button type="button" id="menu-copiar-codigo" class="dropdown-item">
@@ -256,8 +257,8 @@
           </div>
         </section>
 
-        <!-- Botão Flutuante Novo Gasto -->
-        <button type="button" id="btn-novo-gasto-home" class="fab-novo-gasto-home">
+        <!-- Botão Flutuante Novo Gasto (Dentro do Grupo) -->
+        <button type="button" id="btn-novo-gasto-grupo" class="fab-novo-gasto-home">
           <span class="fab-plus">+</span>
           <span data-i18n="addExpenseExpandBtn">Incluir Novo Gasto</span>
         </button>
@@ -376,26 +377,26 @@
         </section>
       </div>
     </div>
+
     <!-- Modal Escolher Grupo para Novo Gasto -->
-
     <div id="modal-escolher-grupo-gasto" class="modal-overlay hidden">
-  <div class="modal-box" style="max-width: 440px;">
-    <div class="modal-header">
-      <h2>Escolher grupo</h2>
-      <button type="button" id="btn-fechar-escolher-grupo" class="btn-close">×</button>
-    </div>
+      <div class="modal-box" style="max-width: 440px;">
+        <div class="modal-header">
+          <h2>Escolher grupo</h2>
+          <button type="button" id="btn-fechar-escolher-grupo" class="btn-close">×</button>
+        </div>
 
-    <div class="modal-body">
-      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
-        Em qual grupo você quer registrar o novo gasto?
-      </p>
-      <div id="lista-escolher-grupo-gasto" class="picker-group-list"></div>
-      <button type="button" id="btn-escolher-novo-grupo-gasto" class="btn-add-group" style="margin-top: 12px;">
-        + Novo grupo
-      </button>
+        <div class="modal-body">
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
+            Em qual grupo você quer registrar o novo gasto?
+          </p>
+          <div id="lista-escolher-grupo-gasto" class="picker-group-list"></div>
+          <button type="button" id="btn-escolher-novo-grupo-gasto" class="btn-add-group" style="margin-top: 12px;">
+            + Novo grupo
+          </button>
+        </div>
+      </div>
     </div>
-  </div>
-</div>
   </main>
 
   <!-- Modal Balanço Global -->
