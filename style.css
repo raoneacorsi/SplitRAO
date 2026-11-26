@@ -1078,7 +1078,7 @@ body {
   color: var(--danger);
 }
 
-/* ==================== BOTÃO FLUTUANTE (FAB) ==================== */
+/* ==================== BOTÃO ADICIONAR GASTO ==================== */
 .fab-novo-gasto {
   position: fixed;
   left: 50%;
@@ -1088,17 +1088,17 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   background: linear-gradient(135deg, #0284c7, #0369a1);
   color: #fff;
   border: none;
-  border-radius: 16px;
-  padding: 15px 24px;
-  min-height: 54px;
-  font-size: 1rem;
+  border-radius: 18px;
+  padding: 18px 28px;
+  min-height: 62px;
+  font-size: 1.12rem;
   font-weight: 700;
   letter-spacing: 0.01em;
-  box-shadow: 0 10px 24px rgba(2, 132, 199, 0.36);
+  box-shadow: 0 12px 28px rgba(2, 132, 199, 0.4);
   cursor: pointer;
   transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
   font-family: inherit;
@@ -1106,7 +1106,7 @@ body {
 
 .fab-novo-gasto:hover {
   transform: translateX(calc(min(100vw - 28px, 680px) / 2 - 100%)) translateY(-2px);
-  box-shadow: 0 12px 28px rgba(2, 132, 199, 0.45);
+  box-shadow: 0 14px 32px rgba(2, 132, 199, 0.48);
 }
 
 .fab-novo-gasto:active {
@@ -1114,7 +1114,7 @@ body {
 }
 
 .fab-plus {
-  font-size: 1.4rem;
+  font-size: 1.65rem;
   font-weight: 700;
   line-height: 1;
 }
@@ -1888,13 +1888,12 @@ select:focus {
   .totais-resumo-cards {
     grid-template-columns: 1fr;
   }
-
- .fab-novo-gasto {
+.fab-novo-gasto {
     bottom: 18px;
-    padding: 14px 20px;
-    min-height: 50px;
-    font-size: 0.95rem;
-    border-radius: 14px;
+    padding: 16px 24px;
+    min-height: 58px;
+    font-size: 1.05rem;
+    border-radius: 16px;
   }
 }
 
