@@ -149,15 +149,18 @@
           </div>
         </div>
 
-        <!-- Participantes: Enviar Link vs Adicionar Pessoa sem App -->
+        <!-- Participantes: dentro do mesmo card do grupo -->
         <div class="participants-block">
           <div class="participants-header">
             <h3 data-i18n="sec1Title">Participantes do Grupo</h3>
-            <button type="button" id="btn-toggle-sem-app" class="btn-secondary-sm" data-i18n="addVirtualPersonBtn">+ Sem app</button>
           </div>
 
           <div class="invite-primary-row">
-            <button type="button" id="btn-compartilhar-grupo" class="btn-invite-link btn-invite-primary" data-i18n="inviteLinkBtn">🔗 Enviar Link</button>
+            <button type="button" id="btn-compartilhar-grupo" class="btn-invite-link btn-invite-primary" data-i18n="inviteLinkBtn">🔗 + Adicionar / Enviar Link</button>
+          </div>
+
+          <div class="unlinked-toggle-row">
+            <button type="button" id="btn-toggle-sem-app" class="btn-ghost-discreet" data-i18n="addVirtualPersonBtn">+ Sem app</button>
           </div>
 
           <form id="form-pessoa" class="input-group-inline hidden">
@@ -169,7 +172,13 @@
         </div>
       </section>
 
-      <!-- Saldos em Destaque (Logo após participantes para leitura rápida de quem deve e quem recebe) -->
+      <!-- Resumo / Banner separado -->
+      <div id="global-user-banner" class="global-user-banner resumo-divida resumo-quitado hidden" aria-live="polite">
+        <span id="global-user-badge" class="resumo-badge"></span>
+        <p id="global-user-texto" class="resumo-texto"></p>
+      </div>
+
+      <!-- Card separado: Saldos / Resumo e Acerto -->
       <section class="card highlight-card">
         <div class="card-header-between">
           <h2 data-i18n="sec3Title">Resumo e Acerto</h2>
@@ -186,7 +195,7 @@
         <ul id="lista-acertos" class="acertos-list"></ul>
       </section>
 
-      <!-- Histórico (Botão direto "Ver histórico" que expande ao clicar) -->
+            <!-- Histórico (Botão direto "Ver histórico" que expande ao clicar) -->
       <section class="card">
         <div class="card-header-between">
           <button type="button" id="btn-toggle-historico" class="btn-expand-section" data-i18n="viewHistorySimpleBtn">Ver histórico</button>
@@ -195,8 +204,10 @@
 
         <div id="container-historico" class="hidden" style="margin-top: 14px;">
           <div class="filter-bar">
-            <label for="filtro-categoria" data-i18n="filterLabel">Filtrar:</label>
-            <select id="filtro-categoria" class="select-sm"></select>
+            <div class="filter-bar-left">
+              <label for="filtro-categoria" data-i18n="filterLabel">Filtrar:</label>
+              <select id="filtro-categoria" class="select-sm"></select>
+            </div>
             <button type="button" id="btn-toggle-totais" class="btn-secondary-sm" data-i18n="totalsBtn">📊 Totais</button>
           </div>
 
