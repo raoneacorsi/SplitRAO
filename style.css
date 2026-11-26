@@ -1960,4 +1960,40 @@ select:focus {
     font-size: 1.05rem;
     border-radius: 16px;
   }
+}.picker-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.picker-group-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.94rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.picker-group-btn:hover {
+  background: #f0f9ff;
+  border-color: #7dd3fc;
+  color: var(--primary-hover);
+  transform: translateY(-1px);
+}
+
+.picker-group-chevron {
+  font-size: 1.25rem;
+  color: var(--text-muted);
+  line-height: 1;
 }

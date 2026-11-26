@@ -258,9 +258,9 @@
 
         <!-- Botão Flutuante Novo Gasto -->
         <button type="button" id="btn-novo-gasto-home" class="fab-novo-gasto-home">
-  <span class="fab-plus">+</span>
-  <span data-i18n="addExpenseExpandBtn">Incluir Novo Gasto</span>
-</button>
+          <span class="fab-plus">+</span>
+          <span data-i18n="addExpenseExpandBtn">Incluir Novo Gasto</span>
+        </button>
       </section>
 
       <!-- Input oculto compartilhado para importar JSON -->
@@ -376,6 +376,26 @@
         </section>
       </div>
     </div>
+    <!-- Modal Escolher Grupo para Novo Gasto -->
+
+    <div id="modal-escolher-grupo-gasto" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width: 440px;">
+    <div class="modal-header">
+      <h2>Escolher grupo</h2>
+      <button type="button" id="btn-fechar-escolher-grupo" class="btn-close">×</button>
+    </div>
+
+    <div class="modal-body">
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
+        Em qual grupo você quer registrar o novo gasto?
+      </p>
+      <div id="lista-escolher-grupo-gasto" class="picker-group-list"></div>
+      <button type="button" id="btn-escolher-novo-grupo-gasto" class="btn-add-group" style="margin-top: 12px;">
+        + Novo grupo
+      </button>
+    </div>
+  </div>
+</div>
   </main>
 
   <!-- Modal Balanço Global -->

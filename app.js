@@ -162,6 +162,24 @@ function abrirFormularioDeNovoGasto() {
   renderAreaDivisao();
 }
 
+function fecharModalEscolherGrupoGasto() {
+  document.getElementById('modal-escolher-grupo-gasto')?.classList.add('hidden');
+}
+
+async function selecionarGrupoParaNovoGasto(grupoEscolhido) {
+  if (!grupoEscolhido) return;
+  fecharModalEscolherGrupoGasto();
+
+  state.grupoAtivoId = grupoEscolhido.id;
+  salvarEstadoLocal();
+  if (currentUser) {
+    vincularGrupoAoUsuario(currentUser.uid, grupoEscolhido.id, true).catch(() => {});
+  }
+
+  abrirTelaDetalheGrupo(grupoEscolhido.id);
+  abrirFormularioDeNovoGasto();
+}
+
 async function aoClicarNovoGastoNaHome() {
   const gruposAtivos = Object.values(state.grupos || {}).filter(g => g && !g.deleted);
 
@@ -175,46 +193,32 @@ async function aoClicarNovoGastoNaHome() {
     return;
   }
 
-  const opcoes = gruposAtivos
-    .map((g, idx) => `${idx + 1} - ${g.nome}`)
-    .join('\n');
+  const listaEl = document.getElementById('lista-escolher-grupo-gasto');
+  const modalEl = document.getElementById('modal-escolher-grupo-gasto');
+  if (!listaEl || !modalEl) return;
 
-  const escolha = prompt(
-    `Escolha o grupo para o novo gasto (ou digite "novo" para criar um):\n\n${opcoes}\n\nDigite "novo" para criar grupo:`
-  );
+  listaEl.innerHTML = '';
 
-  if (escolha === null) return;
+  gruposAtivos.forEach(grupo => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'picker-group-btn';
 
-  const limpo = escolha.trim().toLowerCase();
+    const nomeSpan = document.createElement('span');
+    nomeSpan.textContent = grupo.nome || 'Grupo';
 
-  if (limpo === 'novo' || limpo === '+') {
-    await criarNovoGrupo();
-    const grupoCriado = getGrupoAtivo();
-    if (grupoCriado) {
-      abrirTelaDetalheGrupo(grupoCriado.id);
-      abrirFormularioDeNovoGasto();
-    }
-    return;
-  }
+    const setaSpan = document.createElement('span');
+    setaSpan.className = 'picker-group-chevron';
+    setaSpan.textContent = '›';
 
-  const indice = parseInt(limpo, 10) - 1;
-  const grupoEscolhido =
-    (!Number.isNaN(indice) && gruposAtivos[indice]) ||
-    gruposAtivos.find(g => g.nome.toLowerCase().includes(limpo));
+    btn.appendChild(nomeSpan);
+    btn.appendChild(setaSpan);
+    btn.addEventListener('click', () => selecionarGrupoParaNovoGasto(grupo));
 
-  if (!grupoEscolhido) {
-    alert('Grupo não encontrado. Tente novamente ou digite "novo".');
-    return;
-  }
+    listaEl.appendChild(btn);
+  });
 
-  state.grupoAtivoId = grupoEscolhido.id;
-  salvarEstadoLocal();
-  if (currentUser) {
-    vincularGrupoAoUsuario(currentUser.uid, grupoEscolhido.id, true).catch(() => {});
-  }
-
-  abrirTelaDetalheGrupo(grupoEscolhido.id);
-  abrirFormularioDeNovoGasto();
+  modalEl.classList.remove('hidden');
 }
 // ==================== UTILITÁRIOS DE IDENTIDADE ("EU") ====================
 function salvarNomeUsuarioLocal(nome) {
@@ -4073,6 +4077,23 @@ function initListeners() {
   document.getElementById('btn-instalar-app')?.addEventListener('click', acionarInstalacaoApp);
   document.getElementById('btn-instalar-app-home')?.addEventListener('click', acionarInstalacaoApp);
   document.getElementById('btn-instalar-app-gate')?.addEventListener('click', acionarInstalacaoApp);
+  document.getElementById('btn-fechar-escolher-grupo')?.addEventListener('click', fecharModalEscolherGrupoGasto);
+
+document.getElementById('modal-escolher-grupo-gasto')?.addEventListener('click', (e) => {
+  if (e.target.id === 'modal-escolher-grupo-gasto') {
+    fecharModalEscolherGrupoGasto();
+  }
+});
+
+document.getElementById('btn-escolher-novo-grupo-gasto')?.addEventListener('click', async () => {
+  fecharModalEscolherGrupoGasto();
+  await criarNovoGrupo();
+  const grupoCriado = getGrupoAtivo();
+  if (grupoCriado) {
+    abrirTelaDetalheGrupo(grupoCriado.id);
+    abrirFormularioDeNovoGasto();
+  }
+});
 }
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-novo-gasto-home')?.addEventListener('click', aoClicarNovoGastoNaHome);
