@@ -1959,3 +1959,62 @@ button {
     display: none;
   }
 }
+.user-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid #86efac;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.73rem;
+  font-weight: 600;
+  color: var(--success-text);
+  max-width: 100%;
+}
+
+.user-pill .save-status {
+  font-size: 0.78rem;
+  line-height: 1;
+  flex-shrink: 0;
+  cursor: help;
+}
+.group-title-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.group-avatar-btn {
+  position: relative;
+  width: 72px; /* aumente p/ 80px se quiser ainda mais destaque */
+  height: 72px;
+  border-radius: 16px; /* cantos arredondados (formato quadrado suave) */
+  border: 2px solid var(--border, #e2e8f0);
+  background: var(--surface-alt, #f1f5f9);
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.group-avatar-btn:hover {
+  transform: scale(1.03);
+  border-color: var(--primary, #0284c7);
+}
+
+.group-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.group-avatar-fallback {
+  font-size: 1.85rem; /* maior para acompanhar o tamanho de 72px */
+  line-height: 1;
+}

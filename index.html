@@ -20,13 +20,14 @@
   <main class="app-wrapper hidden" id="main-app">
     <div class="app-container">
 
-      <!-- Cabeçalho (Logo + Nome do App no topo preservados) -->
+      <!-- Cabeçalho -->
       <header class="app-header">
         <div class="top-utility-bar">
           <div class="auth-bar" id="auth-bar">
             <div id="user-logged-box" class="user-pill hidden">
               <img id="user-avatar" class="user-avatar hidden" src="" alt="">
               <span id="user-display-email">usuario@email.com</span>
+              <span class="save-status" id="save-status" title="Conectando à nuvem...">🟡</span>
               <button type="button" id="btn-logout" class="btn-logout-sm" data-i18n="logoutBtn">Sair</button>
             </div>
           </div>
@@ -73,22 +74,29 @@
 
         <div class="brand-row">
           <img src="icon-512.png" alt="SplitRAO" class="logo-badge brand-icon-img">
-          <h1>SplitRAO</h1>
+          <div>
+            <h1>SplitRAO</h1>
+            <p data-i18n="appSubtitle">Divisão inteligente de despesas em tempo real</p>
+          </div>
         </div>
       </header>
 
-      <!-- Resumo Global do Usuário acima do grupo (em destaque e traduzível) -->
+      <!-- Resumo Global do Usuário acima do grupo -->
       <div id="global-user-banner" class="global-user-banner resumo-divida resumo-quitado hidden" aria-live="polite">
         <span id="global-user-badge" class="resumo-badge"></span>
         <p id="global-user-texto" class="resumo-texto"></p>
       </div>
 
-      <!-- Cartão Principal do Grupo em Destaque + Menu de 3 Tracinhos -->
+      <!-- Cartão Principal do Grupo + Participantes -->
       <section class="card group-bar-card">
         <div class="group-hero-row">
           <div class="group-hero-title-wrap">
             <div class="group-title-line">
-              <span class="save-status" id="save-status" title="Conectando à nuvem...">🟡</span>
+              <button type="button" id="btn-imagem-grupo" class="group-avatar-btn" title="Alterar imagem do grupo" aria-label="Alterar imagem do grupo">
+                <img id="grupo-destaque-img" class="group-avatar-img hidden" src="" alt="">
+                <span id="grupo-destaque-fallback" class="group-avatar-fallback" aria-hidden="true">👥</span>
+              </button>
+              <input type="file" id="input-imagem-grupo" accept="image/*" hidden>
               <h2 id="grupo-destaque-nome" class="group-hero-name">Grupo Principal</h2>
               <button type="button" id="btn-renomear-grupo" class="btn-icon-ghost" data-i18n-title="renameGroupTitle" title="Renomear grupo atual">✎</button>
             </div>
@@ -98,7 +106,7 @@
             </div>
           </div>
 
-          <!-- Menu de 3 tracinhos ao lado -->
+          <!-- Menu de 3 tracinhos -->
           <div class="menu-3dots-wrap" id="menu-3dots-wrap">
             <button type="button" id="btn-menu-3dots" class="btn-3dots" aria-expanded="false" aria-label="Menu de opções" title="Opções">
               <span></span>
@@ -108,9 +116,9 @@
 
             <div id="dropdown-3dots" class="dropdown-3dots hidden">
               <button type="button" id="btn-editar-meu-nome" class="dropdown-item">
-              <span></span>
-              <span data-i18n="editMyNameBtn">Alterar meu nome</span>
-            </button>
+                <span></span>
+                <span data-i18n="editMyNameBtn">Alterar meu nome</span>
+              </button>
               <button type="button" id="menu-copiar-codigo" class="dropdown-item">
                 <span>📋</span>
                 <span id="menu-codigo-label">Copiar código (<code id="menu-codigo-valor">---</code>)</span>
@@ -149,7 +157,7 @@
           </div>
         </div>
 
-        <!-- Participantes: dentro do mesmo card do grupo -->
+        <!-- Participantes -->
         <div class="participants-block">
           <div class="participants-header">
             <h3 data-i18n="sec1Title">Participantes do Grupo</h3>
@@ -165,20 +173,14 @@
 
           <form id="form-pessoa" class="input-group-inline hidden">
             <input type="text" id="nome-pessoa" data-i18n-placeholder="personPlaceholder" placeholder="Nome de quem não usa o app..." autocomplete="off">
-            <button type="submit" class="btn-secondary">Adicionar</button>
+            <button type="submit" class="btn-secondary" data-i18n="addPersonConfirmBtn">Adicionar</button>
           </form>
 
           <div id="lista-pessoas" class="tags-container"></div>
         </div>
       </section>
 
-      <!-- Resumo / Banner separado -->
-      <div id="global-user-banner" class="global-user-banner resumo-divida resumo-quitado hidden" aria-live="polite">
-        <span id="global-user-badge" class="resumo-badge"></span>
-        <p id="global-user-texto" class="resumo-texto"></p>
-      </div>
-
-      <!-- Card separado: Saldos / Resumo e Acerto -->
+      <!-- Card: Saldos / Resumo e Acerto -->
       <section class="card highlight-card">
         <div class="card-header-between">
           <h2 data-i18n="sec3Title">Resumo e Acerto</h2>
@@ -195,7 +197,7 @@
         <ul id="lista-acertos" class="acertos-list"></ul>
       </section>
 
-            <!-- Histórico (Botão direto "Ver histórico" que expande ao clicar) -->
+      <!-- Histórico -->
       <section class="card">
         <div class="card-header-between">
           <button type="button" id="btn-toggle-historico" class="btn-expand-section" data-i18n="viewHistorySimpleBtn">Ver histórico</button>
@@ -228,14 +230,13 @@
     <!-- Botão Flutuante Novo Gasto -->
     <button type="button" id="btn-fab-novo-gasto" class="fab-novo-gasto" aria-label="Novo Gasto">
       <span class="fab-plus">+</span>
-      <span class="fab-label">Novo Gasto</span>
+      <span class="fab-label" data-i18n="addExpenseExpandBtn">Incluir Novo Gasto</span>
     </button>
 
-    <!-- Janela / Modal de Novo Gasto / Edição -->
+    <!-- Modal de Novo Gasto / Edição -->
     <div id="modal-form-gasto" class="modal-gasto-overlay hidden">
       <div class="modal-gasto-box">
         <section class="card" id="card-form-gasto">
-
           <div id="container-form-gasto" class="hidden">
             <div class="card-header-between" style="margin-bottom: 16px;">
               <h2 id="titulo-form-gasto" data-i18n="sec2TitleNew">Registrar Novo Gasto</h2>
@@ -342,7 +343,7 @@
     </div>
   </main>
 
-  <!-- Modal Balanço Global (Todos os Grupos) -->
+  <!-- Modal Balanço Global -->
   <div id="modal-global" class="modal-overlay hidden">
     <div class="modal-box">
       <div class="modal-header">
@@ -417,7 +418,7 @@
     </div>
   </div>
 
-  <!-- Tela de Login Obrigatória -->
+  <!-- Tela de Login -->
   <div id="auth-gate" class="auth-gate-screen hidden">
     <div class="auth-gate-card">
       <div class="lang-switcher" id="lang-switcher-gate" style="margin-bottom: 16px;">
@@ -490,9 +491,6 @@
       <div id="auth-feedback" class="auth-feedback hidden"></div>
 
       <form id="form-auth">
-        <button type="button" id="btn-instalar-app-gate" class="btn-secondary hidden" style="width: 100%; margin-top: 10px;">
-         📲 Instalar aplicativo no celular
-        </button>
         <div id="auth-name-group" class="form-group hidden">
           <label for="auth-name" data-i18n="nameLabel">Seu Nome (para a função "Eu")</label>
           <input type="text" id="auth-name" autocomplete="name" data-i18n-placeholder="namePlaceholder" placeholder="Ex: Rodrigo">
@@ -513,30 +511,33 @@
 
         <label class="remember-row">
           <input type="checkbox" id="chk-manter-conectado" checked>
-          <span>Manter-me conectado neste aparelho</span>
+          <span data-i18n="keepSignedInLabel">Manter-me conectado neste aparelho</span>
         </label>
 
         <button type="submit" id="btn-submit-auth" class="btn-primary" data-i18n="authSubmitLoginBtn">Entrar na Conta</button>
+
+        <button type="button" id="btn-instalar-app-gate" class="btn-secondary hidden" style="width: 100%; margin-top: 12px;">
+          📲 Instalar aplicativo no celular
+        </button>
       </form>
     </div>
   </div>
 
-      <!-- Toast de Desfazer Exclusão -->
-   <div id="toast-undo" class="toast-undo hidden" role="status" aria-live="polite">
+  <!-- Toast de Desfazer Exclusão -->
+  <div id="toast-undo" class="toast-undo hidden" role="status" aria-live="polite">
     <span id="toast-undo-msg"></span>
     <button type="button" id="btn-toast-undo" class="toast-undo-btn" data-i18n="undoBtn">Desfazer</button>
   </div>
 
-<script type="module" src="app.js?v=11"></script>
-</script>
-<script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js').catch((err) => {
-        console.warn('Falha ao registrar Service Worker:', err);
+  <script type="module" src="app.js?v=11"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch((err) => {
+          console.warn('Falha ao registrar Service Worker:', err);
+        });
       });
-    });
-  }
-</script>
+    }
+  </script>
 </body>
 </html>

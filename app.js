@@ -127,7 +127,7 @@ let historicoAberto = false;
 let formGastoAberto = false;
 let menu3DotsAberto = false;
 let dataGastoSelecionada = '';
-let undoPendente = null; // { groupId, item, index, timerId }
+let undoPendente = null;
 
 // ==================== UTILITÁRIOS DE IDENTIDADE ("EU") ====================
 function salvarNomeUsuarioLocal(nome) {
@@ -319,6 +319,7 @@ function setSaveStatus(statusKey, extraVars = {}) {
 
   const textoCompleto = t(statusKey, extraVars) || '';
   el.title = textoCompleto;
+  el.setAttribute('aria-label', textoCompleto);
 
   if (statusKey === 'statusSyncedAt') {
     el.textContent = '🟢';
@@ -329,11 +330,35 @@ function setSaveStatus(statusKey, extraVars = {}) {
   }
 }
 
+function comprimirImagemArquivo(file, maxSize = 180, quality = 0.72) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Falha ao ler o arquivo de imagem.'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Arquivo de imagem inválido.'));
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const scale = Math.min(maxSize / img.width, maxSize / img.height, 1);
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 // ==================== INICIALIZAÇÃO DE ESTADO ====================
 function criarGrupoPadrao(id = DEFAULT_GROUP_ID, nome = 'Grupo Principal') {
   return {
     id,
     nome,
+    image: null,
     pessoas: [],
     participantesSemApp: [],
     meuParticipante: null,
@@ -464,9 +489,14 @@ function normalizarEstruturaGrupo(id, raw) {
     };
   }).filter(Boolean);
 
+  const image = typeof g.image === 'string' && g.image
+    ? g.image
+    : (typeof g.photo === 'string' && g.photo ? g.photo : null);
+
   return {
     id: g.id || id,
     nome: g.nome || 'Grupo',
+    image,
     pessoas,
     participantesSemApp,
     meuParticipante,
@@ -636,6 +666,7 @@ async function salvarGrupoNaNuvem(grupo) {
     const payload = {
       id: grupo.id,
       nome: grupo.nome,
+      image: grupo.image || null,
       pessoas: grupo.pessoas || [],
       participantesSemApp: grupo.participantesSemApp || [],
       meuParticipante: grupo.meuParticipante || null,
@@ -658,6 +689,7 @@ async function salvarGrupoNaNuvem(grupo) {
     }, 300);
   }
 }
+
 function renomearNomeEmGrupo(grupo, nomeAntigo, nomeNovo) {
   if (!grupo || !nomeAntigo || !nomeNovo) return false;
   if (normalizarTexto(nomeAntigo) === normalizarTexto(nomeNovo)) return false;
@@ -675,7 +707,6 @@ function renomearNomeEmGrupo(grupo, nomeAntigo, nomeNovo) {
     return valor;
   };
 
-  // 1. Lista de pessoas (evitando duplicata caso nomeNovo já exista no grupo)
   if (Array.isArray(grupo.pessoas)) {
     const jaTemNovo = grupo.pessoas.some(p => normalizarTexto(p) === alvoNovo);
     const mapeadas = [];
@@ -692,7 +723,6 @@ function renomearNomeEmGrupo(grupo, nomeAntigo, nomeNovo) {
     grupo.pessoas = mapeadas;
   }
 
-  // 2. Lista de participantes sem app, se aplicável
   if (Array.isArray(grupo.participantesSemApp)) {
     const semAppAtualizada = [];
     for (const p of grupo.participantesSemApp) {
@@ -704,7 +734,6 @@ function renomearNomeEmGrupo(grupo, nomeAntigo, nomeNovo) {
     grupo.participantesSemApp = semAppAtualizada;
   }
 
-  // 3. Identidade "Eu" no grupo e no cache local
   if (grupo.meuParticipante === nomeAntigo || normalizarTexto(grupo.meuParticipante) === alvoAntigo) {
     grupo.meuParticipante = nomeNovo;
     alterou = true;
@@ -718,7 +747,6 @@ function renomearNomeEmGrupo(grupo, nomeAntigo, nomeNovo) {
     }
   }
 
-  // 4. Despesas e pagamentos/acertos
   if (Array.isArray(grupo.gastos)) {
     grupo.gastos = grupo.gastos.map(g => {
       if (!g || typeof g !== 'object') return g;
@@ -1255,6 +1283,24 @@ function renderSeletorGrupos() {
   const codigoVal = document.getElementById('menu-codigo-valor');
   if (codigoVal) {
     codigoVal.textContent = state.grupoAtivoId;
+  }
+}
+
+function renderImagemGrupo(grupo) {
+  const imgEl = document.getElementById('grupo-destaque-img');
+  const fallbackEl = document.getElementById('grupo-destaque-fallback');
+  if (!imgEl || !fallbackEl) return;
+
+  const foto = grupo?.image || grupo?.photo || '';
+  if (foto) {
+    imgEl.src = foto;
+    imgEl.alt = grupo?.nome || 'Imagem do grupo';
+    imgEl.classList.remove('hidden');
+    fallbackEl.classList.add('hidden');
+  } else {
+    imgEl.removeAttribute('src');
+    imgEl.classList.add('hidden');
+    fallbackEl.classList.remove('hidden');
   }
 }
 
@@ -2864,6 +2910,7 @@ function exportarBackupJSON() {
   a.click();
   URL.revokeObjectURL(url);
 }
+
 const SPLITWISE_IMPORT_KEY = 'raodev_splitwise_pending_import';
 
 async function processarImportacaoPendenteSplitwise() {
@@ -2879,7 +2926,7 @@ async function processarImportacaoPendenteSplitwise() {
 
     let ultimoIdImportado = null;
 
-    for (const [chaveOriginal, gdata] of Object.entries(gruposFonte)) {
+    for (const [, gdata] of Object.entries(gruposFonte)) {
       if (!gdata || typeof gdata !== 'object') continue;
       const gid = gerarId('grp');
       const norm = normalizarEstruturaGrupo(gid, { ...gdata, id: gid });
@@ -2892,6 +2939,7 @@ async function processarImportacaoPendenteSplitwise() {
         await setDoc(getGroupDocRef(gid), {
           id: norm.id,
           nome: norm.nome,
+          image: norm.image || null,
           pessoas: norm.pessoas || [],
           participantesSemApp: norm.participantesSemApp || [],
           meuParticipante: norm.meuParticipante || null,
@@ -2922,6 +2970,7 @@ async function processarImportacaoPendenteSplitwise() {
     setSaveStatus('statusSaveError');
   }
 }
+
 async function importarBackupJSON(file) {
   if (!file) return;
   isSavingCloud = true;
@@ -2942,7 +2991,6 @@ async function importarBackupJSON(file) {
         ? gdata.id.trim()
         : (typeof chaveOriginal === 'string' && chaveOriginal.trim() ? chaveOriginal.trim() : gerarId('grp'));
 
-      // Se já existe um grupo com esse ID, gera um novo para nunca sobrescrever
       const gid = state.grupos[idCandidato] ? gerarId('grp') : idCandidato;
 
       const norm = normalizarEstruturaGrupo(gid, { ...gdata, id: gid });
@@ -2955,6 +3003,7 @@ async function importarBackupJSON(file) {
         await setDoc(getGroupDocRef(gid), {
           id: norm.id,
           nome: norm.nome,
+          image: norm.image || null,
           pessoas: norm.pessoas || [],
           participantesSemApp: norm.participantesSemApp || [],
           meuParticipante: norm.meuParticipante || null,
@@ -3046,6 +3095,7 @@ function renderTudo() {
   }
 
   renderSeletorGrupos();
+  renderImagemGrupo(grupo);
   renderListaPessoas();
   renderPagadorSelect();
   renderSeletorCategorias();
@@ -3088,6 +3138,32 @@ function initListeners() {
   document.getElementById('select-grupo')?.addEventListener('change', (e) => trocarGrupoAtivo(e.target.value));
   document.getElementById('btn-novo-grupo')?.addEventListener('click', criarNovoGrupo);
   document.getElementById('btn-renomear-grupo')?.addEventListener('click', renomearGrupoAtual);
+
+  const btnImgGrupo = document.getElementById('btn-imagem-grupo');
+  const inputImgGrupo = document.getElementById('input-imagem-grupo');
+
+  btnImgGrupo?.addEventListener('click', () => {
+    inputImgGrupo?.click();
+  });
+
+  inputImgGrupo?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    try {
+      const base64Img = await comprimirImagemArquivo(file, 180, 0.72);
+      const grupoAtual = getGrupoAtivo();
+      if (!grupoAtual) return;
+
+      grupoAtual.image = base64Img;
+      renderImagemGrupo(grupoAtual);
+      await salvarGrupoNaNuvem(grupoAtual);
+    } catch (err) {
+      console.error('Erro ao processar imagem do grupo:', err);
+    }
+  });
+
   document.getElementById('btn-toast-undo')?.addEventListener('click', () => {
     desfazerExclusaoLancamento();
   });
@@ -3300,10 +3376,12 @@ function initListeners() {
     }
     renderTudo();
   });
-    document.getElementById('btn-editar-meu-nome')?.addEventListener('click', async () => {
+
+  document.getElementById('btn-editar-meu-nome')?.addEventListener('click', async () => {
     setMenu3DotsAberto(false);
     await atualizarMeuNomeEmTodosOsGrupos();
-});
+  });
+
   document.getElementById('btn-abrir-quitar')?.addEventListener('click', () => abrirModalQuitar());
   document.getElementById('btn-fechar-quitar')?.addEventListener('click', fecharModalQuitar);
   document.getElementById('btn-cancelar-quitar')?.addEventListener('click', fecharModalQuitar);
@@ -3392,69 +3470,68 @@ function initListeners() {
 
   document.getElementById('btn-copiar-texto')?.addEventListener('click', (e) => copiarWpp(e.currentTarget));
   document.getElementById('btn-copiar-global')?.addEventListener('click', (e) => copiarWpp(e.currentTarget));
-  window.addEventListener('DOMContentLoaded', sincronizarBotoesInstalar);
 
-// ==================== INSTALAÇÃO DO PWA ====================
-let deferredInstallPrompt = null;
+  // ==================== INSTALAÇÃO DO PWA ====================
+  let deferredInstallPrompt = null;
 
-function isAppStandalone() {
-  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-}
+  function isAppStandalone() {
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  }
 
-function isAndroidDevice() {
-  return /android/i.test(window.navigator.userAgent);
-}
+  function isAndroidDevice() {
+    return /android/i.test(window.navigator.userAgent);
+  }
 
-function isIOSDevice() {
-  return /iphone|ipad|ipod/i.test(window.navigator.userAgent);
-}
+  function isIOSDevice() {
+    return /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+  }
 
-function sincronizarBotoesInstalar() {
-  const jaInstalado = isAppStandalone();
-  const deveMostrar = !jaInstalado;
+  function sincronizarBotoesInstalar() {
+    const jaInstalado = isAppStandalone();
+    const deveMostrar = !jaInstalado;
 
-  ['btn-instalar-app', 'btn-instalar-app-gate'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.toggle('hidden', !deveMostrar);
+    ['btn-instalar-app', 'btn-instalar-app-gate'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.toggle('hidden', !deveMostrar);
+    });
+  }
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    sincronizarBotoesInstalar();
   });
-}
 
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredInstallPrompt = e;
-  sincronizarBotoesInstalar();
-});
+  window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    sincronizarBotoesInstalar();
+  });
 
-window.addEventListener('appinstalled', () => {
-  deferredInstallPrompt = null;
-  sincronizarBotoesInstalar();
-});
+  async function acionarInstalacaoApp() {
+    if (typeof setMenu3DotsAberto === 'function') setMenu3DotsAberto(false);
 
-async function acionarInstalacaoApp() {
-  if (typeof setMenu3DotsAberto === 'function') setMenu3DotsAberto(false);
-
-  if (deferredInstallPrompt) {
-    deferredInstallPrompt.prompt();
-    const { outcome } = await deferredInstallPrompt.userChoice;
-    if (outcome === 'accepted') {
-      deferredInstallPrompt = null;
-      sincronizarBotoesInstalar();
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      const { outcome } = await deferredInstallPrompt.userChoice;
+      if (outcome === 'accepted') {
+        deferredInstallPrompt = null;
+        sincronizarBotoesInstalar();
+      }
+      return;
     }
-    return;
+
+    if (isIOSDevice()) {
+      alert('Para instalar no iPhone/iPad:\n\n1. Toque no botão Compartilhar do Safari.\n2. Toque em "Adicionar à Tela de Início".');
+    } else if (isAndroidDevice()) {
+      alert('Para instalar no Android:\n\n1. Toque nos 3 pontinhos (⋮) no canto superior direito do navegador.\n2. Toque em "Instalar aplicativo" ou "Adicionar à tela inicial".');
+    } else {
+      alert('Para instalar, use a opção "Instalar aplicativo" ou "Adicionar à tela inicial" no menu do navegador.');
+    }
   }
 
-  if (isIOSDevice()) {
-    alert('Para instalar no iPhone/iPad:\n\n1. Toque no botão Compartilhar do Safari.\n2. Toque em "Adicionar à Tela de Início".');
-  } else if (isAndroidDevice()) {
-    alert('Para instalar no Android:\n\n1. Toque nos 3 pontinhos (⋮) no canto superior direito do navegador.\n2. Toque em "Instalar aplicativo" ou "Adicionar à tela inicial".');
-  } else {
-    alert('Para instalar, use a opção "Instalar aplicativo" ou "Adicionar à tela inicial" no menu do navegador.');
-  }
-}
-
-sincronizarBotoesInstalar();
-document.getElementById('btn-instalar-app')?.addEventListener('click', acionarInstalacaoApp);
-document.getElementById('btn-instalar-app-gate')?.addEventListener('click', acionarInstalacaoApp);
+  sincronizarBotoesInstalar();
+  document.getElementById('btn-instalar-app')?.addEventListener('click', acionarInstalacaoApp);
+  document.getElementById('btn-instalar-app-gate')?.addEventListener('click', acionarInstalacaoApp);
 }
 
 // ==================== BOOT ====================

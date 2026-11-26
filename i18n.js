@@ -230,6 +230,7 @@ export const I18N = {
     editMyNamePrompt: 'Digite o novo nome que você quer usar nos grupos:',
     myNameUpdatedAlert: '✅ Seu nome foi atualizado para "{name}" em todos os grupos!',
     myNameEmptyAlert: 'Digite um nome válido.', 
+    keepSignedInLabel: 'Manter-me conectado neste aparelho', 
   },
   es: {
     appSubtitle: 'División inteligente de gastos en tiempo real',
@@ -460,6 +461,7 @@ export const I18N = {
     editMyNamePrompt: 'Escribe el nuevo nombre que quieres usar en los grupos:',
     myNameUpdatedAlert: '✅ ¡Tu nombre se actualizó a "{name}" en todos los grupos!',
     myNameEmptyAlert: 'Escribe un nombre válido.',
+    keepSignedInLabel: 'Mantener sesión iniciada en este dispositivo',
   },
   en: {
     appSubtitle: 'Smart real-time expense splitting',
@@ -690,6 +692,7 @@ export const I18N = {
     editMyNamePrompt: 'Enter the new name you want to use across groups:',
     myNameUpdatedAlert: '✅ Your name has been updated to "{name}" across all groups!',
     myNameEmptyAlert: 'Please enter a valid name.',
+    keepSignedInLabel: 'Keep me signed in on this device', 
   }
 };
 
