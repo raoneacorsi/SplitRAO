@@ -2014,6 +2014,10 @@ button {
   display: block;
 }
 
+.group-avatar-img.hidden {
+  display: none !important;
+}
+
 .group-avatar-fallback {
   font-size: 1.85rem; /* maior para acompanhar o tamanho de 72px */
   line-height: 1;
