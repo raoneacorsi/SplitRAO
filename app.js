@@ -602,6 +602,7 @@ function normalizarEstruturaGrupo(id, raw) {
   return {
     id: g.id || id,
     nome: g.nome || 'Grupo',
+    order: typeof g.order === 'number' ? g.order : 0,
     image,
     pessoas,
     participantesSemApp,
@@ -769,9 +770,10 @@ async function salvarGrupoNaNuvem(grupo) {
 
   try {
     const groupRef = getGroupDocRef(grupo.id);
-    const payload = {
+   const payload = {
       id: grupo.id,
       nome: grupo.nome,
+      order: typeof grupo.order === 'number' ? grupo.order : 0,
       image: grupo.image || null,
       pessoas: grupo.pessoas || [],
       participantesSemApp: grupo.participantesSemApp || [],
@@ -1293,6 +1295,23 @@ function initAuthListeners() {
 }
 
 // ==================== INTERNACIONALIZAÇÃO (I18N) ====================
+function atualizarBandeiraAtualUI() {
+  document.querySelectorAll('.lang-dropdown').forEach(dropdown => {
+    const currentFlagEl = dropdown.querySelector('.lang-current-flag');
+    const currentBtn = dropdown.querySelector('.lang-current-btn');
+    const activeOpt = dropdown.querySelector(`.lang-option[data-lang="${currentLang}"]`);
+
+    dropdown.querySelectorAll('.lang-option').forEach(opt => {
+      opt.classList.toggle('active', opt.dataset.lang === currentLang);
+    });
+
+    if (activeOpt && currentFlagEl) {
+      currentFlagEl.innerHTML = activeOpt.innerHTML;
+      if (currentBtn) currentBtn.title = activeOpt.title;
+    }
+  });
+}
+
 function aplicarIdiomaNaInterface() {
   document.documentElement.lang = currentLang === 'pt' ? 'pt-BR' : currentLang;
 
@@ -1314,9 +1333,7 @@ function aplicarIdiomaNaInterface() {
     if (trad) el.title = trad;
   });
 
-  document.querySelectorAll('.lang-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.lang === currentLang);
-  });
+  atualizarBandeiraAtualUI();
 
   setModoAuth(authMode);
   atualizarLabelDataGasto();
@@ -1331,16 +1348,42 @@ function aplicarIdiomaNaInterface() {
   renderTudo();
 }
 
+function fecharMenusIdioma() {
+  document.querySelectorAll('.lang-dropdown').forEach(dropdown => {
+    dropdown.querySelector('.lang-menu')?.classList.add('hidden');
+    dropdown.querySelector('.lang-current-btn')?.setAttribute('aria-expanded', 'false');
+  });
+}
+
 function initLanguageSwitcher() {
-  document.querySelectorAll('.lang-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const novoLang = btn.dataset.lang;
-      if (!novoLang || novoLang === currentLang) return;
-      currentLang = novoLang;
-      localStorage.setItem(LANG_STORAGE_KEY, currentLang);
-      aplicarIdiomaNaInterface();
+  document.querySelectorAll('.lang-dropdown').forEach(dropdown => {
+    const trigger = dropdown.querySelector('.lang-current-btn');
+    const menu = dropdown.querySelector('.lang-menu');
+
+    trigger?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const estavaFechado = menu?.classList.contains('hidden');
+      fecharMenusIdioma();
+      if (estavaFechado) {
+        menu?.classList.remove('hidden');
+        trigger.setAttribute('aria-expanded', 'true');
+      }
+    });
+
+    dropdown.querySelectorAll('.lang-option').forEach(opt => {
+      opt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const novoLang = opt.dataset.lang;
+        fecharMenusIdioma();
+        if (!novoLang || novoLang === currentLang) return;
+        currentLang = novoLang;
+        localStorage.setItem(LANG_STORAGE_KEY, currentLang);
+        aplicarIdiomaNaInterface();
+      });
     });
   });
+
+  document.addEventListener('click', fecharMenusIdioma);
 }
 
 // ==================== MENUS DE 3 TRACINHOS ====================
@@ -1404,7 +1447,132 @@ function getTextoSaldoUsuarioNoGrupo(grupo) {
     classe: 'neutro'
   };
 }
+function getGruposOrdenados() {
+  const lista = Object.values(state.grupos || {}).filter(g => g && !g.deleted);
+  return lista
+    .map((grupo, idx) => ({
+      grupo,
+      idx,
+      ordem: typeof grupo.order === 'number' ? grupo.order : idx
+    }))
+    .sort((a, b) => (a.ordem !== b.ordem ? a.ordem - b.ordem : a.idx - b.idx))
+    .map(item => item.grupo);
+}
 
+async function persistirOrdemGrupos(gruposOrdenados) {
+  for (let i = 0; i < gruposOrdenados.length; i++) {
+    const g = gruposOrdenados[i];
+    g.order = i;
+    if (state.grupos[g.id]) {
+      state.grupos[g.id].order = i;
+    }
+  }
+  salvarEstadoLocal();
+
+  for (const g of gruposOrdenados) {
+    await salvarGrupoNaNuvem(g);
+  }
+}
+
+function anexarDragReordenacaoGrupo(itemEl, grupoId, listaEl) {
+  const handle = itemEl.querySelector('.group-drag-handle');
+  if (!handle) return;
+
+  let arrastando = false;
+  let inicioY = 0;
+  let alvoAlvoId = null;
+  let inserirAntes = true;
+  let bloqueiaProximoClick = false;
+
+  const limparIndicadores = () => {
+    listaEl.querySelectorAll('.group-list-item').forEach(el => {
+      el.classList.remove('drag-over-top', 'drag-over-bottom', 'is-dragging');
+      el.style.transform = '';
+    });
+  };
+
+  const aoMover = (ev) => {
+    const deltaY = ev.clientY - inicioY;
+    if (!arrastando && Math.abs(deltaY) > 6) {
+      arrastando = true;
+      bloqueiaProximoClick = true;
+      itemEl.classList.add('is-dragging');
+    }
+    if (!arrastando) return;
+
+    ev.preventDefault();
+    itemEl.style.transform = `translateY(${deltaY}px) scale(1.015)`;
+
+    const irmãos = Array.from(listaEl.querySelectorAll('.group-list-item')).filter(el => el !== itemEl);
+    alvoAlvoId = null;
+
+    for (const outro of irmãos) {
+      outro.classList.remove('drag-over-top', 'drag-over-bottom');
+      const rect = outro.getBoundingClientRect();
+      const meioY = rect.top + rect.height / 2;
+
+      if (ev.clientY >= rect.top && ev.clientY <= rect.bottom) {
+        alvoAlvoId = outro.dataset.groupId;
+        inserirAntes = ev.clientY < meioY;
+        outro.classList.add(inserirAntes ? 'drag-over-top' : 'drag-over-bottom');
+      }
+    }
+  };
+
+  const aoSoltar = async () => {
+    window.removeEventListener('pointermove', aoMover);
+    window.removeEventListener('pointerup', aoSoltar);
+    window.removeEventListener('pointercancel', aoSoltar);
+
+    if (!arrastando) {
+      limparIndicadores();
+      return;
+    }
+
+    const ordenados = getGruposOrdenados();
+    const idxOrigem = ordenados.findIndex(g => g.id === grupoId);
+
+    limparIndicadores();
+
+    if (idxOrigem >= 0 && alvoAlvoId && alvoAlvoId !== grupoId) {
+      const [removido] = ordenados.splice(idxOrigem, 1);
+      let idxDestino = ordenados.findIndex(g => g.id === alvoAlvoId);
+      if (idxDestino >= 0) {
+        if (!inserirAntes) idxDestino += 1;
+        ordenados.splice(idxDestino, 0, removido);
+        renderSeletorGrupos();
+        await persistirOrdemGrupos(ordenados);
+      }
+    } else {
+      renderSeletorGrupos();
+    }
+
+    arrastando = false;
+    alvoAlvoId = null;
+    setTimeout(() => {
+      bloqueiaProximoClick = false;
+    }, 50);
+  };
+
+  handle.addEventListener('pointerdown', (ev) => {
+    if (ev.button !== undefined && ev.button !== 0) return;
+    ev.stopPropagation();
+    ev.preventDefault();
+    inicioY = ev.clientY;
+    arrastando = false;
+
+    window.addEventListener('pointermove', aoMover, { passive: false });
+    window.addEventListener('pointerup', aoSoltar);
+    window.addEventListener('pointercancel', aoSoltar);
+  });
+
+  itemEl.addEventListener('click', (ev) => {
+    if (bloqueiaProximoClick) {
+      ev.preventDefault();
+      ev.stopPropagation();
+    }
+  }, true);
+}
 function renderSeletorGrupos() {
   const grupo = getGrupoAtivo();
   const listaEl = document.getElementById('lista-grupos');
@@ -1412,10 +1580,11 @@ function renderSeletorGrupos() {
   if (listaEl) {
     listaEl.innerHTML = '';
 
-    Object.values(state.grupos).forEach(g => {
+    getGruposOrdenados().forEach(g => {
       const item = document.createElement('button');
       item.type = 'button';
       item.className = 'group-list-item';
+      item.dataset.groupId = g.id;
       item.setAttribute('role', 'option');
 
       const foto = g.image || g.photo || '';
@@ -1431,6 +1600,7 @@ function renderSeletorGrupos() {
           <span class="group-list-name">${escapeHTML(g.nome)}</span>
           <span class="group-list-balance ${saldoClasse}">${escapeHTML(saldoTexto)}</span>
         </span>
+        <span class="group-drag-handle" title="Arrastar para reordenar" aria-label="Arrastar para reordenar">⋮⋮</span>
         <span class="group-list-chevron">›</span>
       `;
 
@@ -1442,6 +1612,7 @@ function renderSeletorGrupos() {
         }
       });
 
+      anexarDragReordenacaoGrupo(item, g.id, listaEl);
       listaEl.appendChild(item);
     });
   }
@@ -3256,7 +3427,6 @@ function converterSplitwiseCSVParaGrupo(csvText, nomeArquivo = 'Splitwise') {
 function converterSplitwiseJSONParaGrupos(parsed) {
   if (!parsed || typeof parsed !== 'object') return [];
 
-  // Exportação no formato de despesas brutas do Splitwise: { expenses: [ ... ] } ou { items: [ ... ] }
   const listaDespesas = Array.isArray(parsed.expenses)
     ? parsed.expenses
     : (Array.isArray(parsed.items) ? parsed.items : null);
@@ -3369,7 +3539,6 @@ function converterSplitwiseJSONParaGrupos(parsed) {
     }];
   }
 
-  // Exportação no formato de grupos do Splitwise: { groups: [ { name, members, expenses } ] }
   if (Array.isArray(parsed.groups)) {
     const saida = [];
     for (const grp of parsed.groups) {
@@ -3397,7 +3566,6 @@ function converterSplitwiseJSONParaGrupos(parsed) {
 function extrairGruposDeJSON(parsed) {
   if (!parsed || typeof parsed !== 'object') return [];
 
-  // 1. Formato nativo com "grupos" como ARRAY (ex: sitio.json) ou OBJETO
   const gruposFonte = parsed?.state?.grupos ?? parsed?.grupos;
   if (Array.isArray(gruposFonte)) {
     return gruposFonte
@@ -3411,25 +3579,21 @@ function extrairGruposDeJSON(parsed) {
     }));
   }
 
-  // 2. Array de grupos na raiz
   if (Array.isArray(parsed)) {
     return parsed
       .filter(item => item && typeof item === 'object')
       .map(item => ({ chaveOriginal: item.id || '', gdata: item }));
   }
 
-  // 3. Formatos de exportação do Splitwise (JSON)
   const gruposSplitwise = converterSplitwiseJSONParaGrupos(parsed);
   if (gruposSplitwise.length > 0) {
     return gruposSplitwise;
   }
 
-  // 4. Objeto wrapper { grupo: { ... } }
   if (parsed.grupo && typeof parsed.grupo === 'object') {
     return [{ chaveOriginal: parsed.grupo.id || '', gdata: parsed.grupo }];
   }
 
-  // 5. Objeto de um único grupo direto
   if (typeof parsed.nome === 'string' || Array.isArray(parsed.pessoas) || Array.isArray(parsed.gastos)) {
     return [{ chaveOriginal: parsed.id || '', gdata: parsed }];
   }
@@ -3449,7 +3613,6 @@ async function persistirGruposImportados(entradas) {
       ? gdata.id.trim()
       : (typeof chaveOriginal === 'string' && chaveOriginal.trim() ? chaveOriginal.trim() : gerarId('grp'));
 
-    // Se já existir um grupo com o mesmo ID, cria um novo ID para não colidir
     const gid = state.grupos[idCandidato] ? gerarId('grp') : idCandidato;
 
     const norm = normalizarEstruturaGrupo(gid, { ...gdata, id: gid });
@@ -3492,7 +3655,6 @@ async function persistirGruposImportados(entradas) {
       setSaveStatus('statusSyncedAt', { time: agora });
     }
 
-    // Abre o grupo importado diretamente para você ver na tela
     abrirTelaDetalheGrupo(primeiroIdNovo);
   }
 

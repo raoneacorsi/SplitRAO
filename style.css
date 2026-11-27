@@ -110,36 +110,70 @@ body {
   background: #fecaca;
 }
 
-.lang-switcher {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  padding: 4px 6px;
-  border-radius: 999px;
+.lang-dropdown {
+  position: relative;
+  display: inline-block;
 }
 
-.lang-btn {
+.lang-current-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 9px;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.lang-current-btn:hover {
+  border-color: var(--primary);
+  background: var(--surface-alt);
+}
+
+.lang-caret {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1;
+}
+
+.lang-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 5px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lang-option {
   background: transparent;
-  border: 2px solid transparent;
-  border-radius: 6px;
-  padding: 2px 3px;
+  border: 1.5px solid transparent;
+  border-radius: 8px;
+  padding: 5px 8px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  opacity: 0.65;
+  justify-content: center;
   transition: all 0.15s ease;
 }
 
-.lang-btn:hover {
-  opacity: 0.95;
+.lang-option:hover {
+  background: var(--surface-alt);
+  border-color: #cbd5e1;
 }
 
-.lang-btn.active {
-  opacity: 1;
-  border-color: var(--primary);
+.lang-option.active {
   background: var(--primary-light);
+  border-color: var(--primary);
 }
 
 .flag-icon {
@@ -1996,4 +2030,51 @@ select:focus {
   font-size: 1.25rem;
   color: var(--text-muted);
   line-height: 1;
+}
+/* ==================== REORDENAÇÃO DE GRUPOS (DRAG & DROP) ==================== */
+.group-list-item.is-dragging {
+  opacity: 0.92;
+  background: #f0f9ff;
+  border-color: var(--primary);
+  box-shadow: 0 12px 24px rgba(2, 132, 199, 0.22);
+  transform: scale(1.015);
+  z-index: 30;
+  position: relative;
+  cursor: grabbing;
+}
+
+.group-list-item.drag-over-top {
+  border-top: 3px solid var(--primary);
+}
+
+.group-list-item.drag-over-bottom {
+  border-bottom: 3px solid var(--primary);
+}
+
+.group-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 36px;
+  margin-left: auto;
+  margin-right: -2px;
+  color: var(--text-muted);
+  font-size: 1.05rem;
+  line-height: 1;
+  border-radius: 8px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  flex-shrink: 0;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.group-drag-handle:hover {
+  color: var(--primary);
+  background: #e0f2fe;
+}
+
+.group-drag-handle:active {
+  cursor: grabbing;
 }
