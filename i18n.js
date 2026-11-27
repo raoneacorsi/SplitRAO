@@ -957,3 +957,20 @@ Object.assign(I18N.pt, {"leaveOnlyText": "Você pode sair sem apagar despesas, p
 Object.assign(I18N.en, {"leaveOnlyText": "You can leave without deleting expenses, payments or debts.", "leaveDeleteError": "Could not complete the operation. Check your connection and permissions."});
 
 Object.assign(I18N.es, {"leaveOnlyText": "Puedes salir sin borrar gastos, pagos ni deudas.", "leaveDeleteError": "No se pudo completar la operación. Comprueba la conexión y los permisos."});
+
+Object.assign(I18N.pt, {"multiInvite": "Convidar para vários grupos", "multiAll": "Selecionar todos", "multiGenerate": "Gerar link de convite", "multiJoin": "Entrar nos grupos", "multiNew": "Sou um novo participante", "multiName": "Como deseja aparecer neste grupo?", "multiConfirm": "Confirmar entrada", "groupMyName": "Alterar meu nome neste grupo", "multiError": "Não foi possível concluir. Confira os nomes, o convite e as permissões."});
+
+Object.assign(I18N.en, {"multiInvite": "Invite to multiple groups", "multiAll": "Select all", "multiGenerate": "Generate invitation link", "multiJoin": "Join groups", "multiNew": "I am a new participant", "multiName": "How should your name appear in this group?", "multiConfirm": "Confirm joining", "groupMyName": "Change my name in this group", "multiError": "Could not complete. Check names, invitation and permissions."});
+
+Object.assign(I18N.es, {"multiInvite": "Invitar a varios grupos", "multiAll": "Seleccionar todos", "multiGenerate": "Generar enlace de invitación", "multiJoin": "Entrar en los grupos", "multiNew": "Soy un nuevo participante", "multiName": "¿Cómo quieres aparecer en este grupo?", "multiConfirm": "Confirmar ingreso", "groupMyName": "Cambiar mi nombre en este grupo", "multiError": "No se pudo completar. Comprueba los nombres, la invitación y los permisos."});
+
+Object.assign(I18N.pt, {"importParticipantTitle": "Quem é você no grupo importado?", "importParticipantConfirm": "Confirmar importação", "importParticipantDuplicate": "Informe um nome válido e que não esteja em uso por outro participante.", "multiPermissionError": "O Firebase negou a criação do convite. Confira as regras da coleção convitesMultiplos."});
+
+Object.assign(I18N.en, {"importParticipantTitle": "Who are you in the imported group?", "importParticipantConfirm": "Confirm import", "importParticipantDuplicate": "Enter a valid name not used by another participant.", "multiPermissionError": "Firebase denied invitation creation. Check the convitesMultiplos collection rules."});
+
+Object.assign(I18N.es, {"importParticipantTitle": "¿Quién eres en el grupo importado?", "importParticipantConfirm": "Confirmar importación", "importParticipantDuplicate": "Introduce un nombre válido que no use otro participante.", "multiPermissionError": "Firebase denegó la creación de la invitación. Revisa las reglas de la colección convitesMultiplos."});
+
+// v26.2 - escolha explícita do participante
+Object.assign(I18N.pt, {chooseExistingParticipant: "Você já está neste grupo? Escolha seu nome ou entre como novo participante."});
+Object.assign(I18N.en, {chooseExistingParticipant: "Already in this group? Choose your name or join as a new participant."});
+Object.assign(I18N.es, {chooseExistingParticipant: "¿Ya estás en este grupo? Elige tu nombre o entra como nuevo participante."});

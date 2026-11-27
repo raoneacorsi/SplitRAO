@@ -115,6 +115,7 @@
                   <span>✏️</span>
                   <span data-i18n="editMyNameBtn">Alterar meu nome</span>
                 </button>
+                <button type="button" id="btn-multi-invite" class="dropdown-item"><span>👥</span><span data-i18n="multiInvite">Convidar para vários grupos</span></button>
                 <button type="button" id="btn-entrar-codigo-home" class="dropdown-item">
                   <span>🔑</span>
                   <span data-i18n="codeBtn">Código</span>
@@ -184,6 +185,7 @@
 
               <div id="dropdown-3dots" class="dropdown-3dots hidden">
                 <button type="button" id="btn-renomear-grupo" class="dropdown-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1L20 7l-4-4L4 15z"/></svg><span data-i18n="renameGroupTitle">Editar nome do grupo</span></button>
+                <button type="button" id="btn-group-my-name" class="dropdown-item"><span>✏️</span><span data-i18n="groupMyName">Alterar meu nome neste grupo</span></button>
                 <button type="button" id="menu-copiar-codigo" class="dropdown-item">
                   <span>📋</span>
                   <span id="menu-codigo-label"><span data-i18n="copyCodeMenuLabel">Copiar código</span> (<code id="menu-codigo-valor">---</code>)</span>
@@ -681,7 +683,15 @@
     <button type="button" id="btn-toast-undo" class="toast-undo-btn" data-i18n="undoBtn">Desfazer</button>
   </div>
 
-  <script type="module" src="app.js?v=25"></script>
+  <!-- Modal compartilhado: seleção de grupos, vinculação e nome local. -->
+  <div id="modal-v26" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="v26-titulo">
+    <div class="modal-box" style="max-width:440px;max-height:85vh;overflow:auto">
+      <div class="modal-header"><h2 id="v26-titulo"></h2></div>
+      <div id="v26-corpo" class="modal-body" style="display:grid;gap:12px"></div>
+      <div class="modal-footer"><button type="button" id="v26-cancelar" class="btn-secondary" data-i18n="cancelBtn">Cancelar</button></div>
+    </div>
+  </div>
+  <script type="module" src="app.js?v=26.2"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

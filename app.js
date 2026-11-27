@@ -197,6 +197,7 @@ function fecharModalPeloVoltar() {
     'modal-novo-grupo': 'btn-fechar-novo-grupo',
     'modal-sair-grupo': 'btn-fechar-sair-grupo',
     'modal-convite': 'btn-fechar-convite',
+    'modal-v26': 'v26-cancelar',
     'modal-global': 'btn-fechar-global',
     'modal-quitar': 'btn-fechar-quitar',
     'modal-relatorio': 'btn-fechar-modal'
@@ -325,25 +326,15 @@ function getNomeUsuarioEfetivo() {
 }
 
 function getMeParticipantName(grupo) {
-  if (!grupo || !Array.isArray(grupo.pessoas) || grupo.pessoas.length === 0) return null;
-
-  if (grupo.meuParticipante && grupo.pessoas.includes(grupo.meuParticipante)) {
-    return grupo.meuParticipante;
+  if (!grupo?.pessoas) return null;
+  if (currentUser) {
+    const nome = grupo.vinculos?.[currentUser.uid];
+    if (grupo.pessoas.includes(nome)) return nome;
+    if (grupo.members && !grupo.members[currentUser.uid]) return null;
+    const ocupados = Object.values(grupo.vinculos || {});
+    return grupo.pessoas.find(p => !ocupados.includes(p) && normalizarTexto(p) === normalizarTexto(getNomeUsuarioEfetivo())) || null;
   }
-
-  const cachedMe = meByGroupCache[grupo.id];
-  if (cachedMe && grupo.pessoas.includes(cachedMe)) {
-    return cachedMe;
-  }
-
-  const meuNome = getNomeUsuarioEfetivo();
-  if (meuNome) {
-    const alvo = normalizarTexto(meuNome);
-    const match = grupo.pessoas.find(p => normalizarTexto(p) === alvo);
-    if (match) return match;
-  }
-
-  return null;
+  return grupo.pessoas.includes(grupo.meuParticipante) ? grupo.meuParticipante : null;
 }
 
 function setMeParticipantName(grupo, pessoaNome) {
@@ -358,24 +349,7 @@ function setMeParticipantName(grupo, pessoaNome) {
 }
 
 function garantirUsuarioLogadoNoGrupo(grupo) {
-  if (!grupo || typeof grupo !== 'object') return false;
-  if (!Array.isArray(grupo.pessoas)) grupo.pessoas = [];
-
-  const nomeUsuario = getNomeUsuarioEfetivo();
-  if (!nomeUsuario) return false;
-
-  const alvo = normalizarTexto(nomeUsuario);
-  const existente = grupo.pessoas.find(p => normalizarTexto(p) === alvo);
-
-  if (!existente) {
-    grupo.pessoas.push(nomeUsuario);
-    setMeParticipantName(grupo, nomeUsuario);
-    return true;
-  }
-
-  if (grupo.meuParticipante !== existente) {
-    setMeParticipantName(grupo, existente);
-  }
+  // Renderização nunca cria participantes em grupos compartilhados.
   return false;
 }
 
@@ -472,11 +446,13 @@ function gerarCodigoGrupo() {
 }
 
 // Reserva o documento atomicamente; nunca substitui um grupo existente.
-async function reservarNovoGrupo(grupo, uid = currentUser?.uid) {
+async function reservarNovoGrupo(grupo, uid = currentUser?.uid, participanteEscolhido = null) {
   for (let tentativa = 0; tentativa < 20; tentativa++) {
     const id = gerarCodigoGrupo();
     if (state.grupos[id]) continue;
-    const novo = { ...grupo, id };
+    const novo = { ...grupo, id, members: { [uid]: true }, vinculos: {} };
+    const nome = participanteEscolhido || grupo.pessoas.find(p => normalizarTexto(p) === normalizarTexto(getNomeUsuarioEfetivo()));
+    if (nome) novo.vinculos[uid] = nome;
     if (!uid) throw new Error('Authentication required');
     const reservado = await runTransaction(db, async tx => {
       const ref = getGroupDocRef(id);
@@ -615,8 +591,8 @@ function normalizarEstruturaGrupo(id, raw) {
     : [];
 
   let meuParticipante = typeof g.meuParticipante === 'string'
-    ? resolverNomePessoa(g.meuParticipante)
-    : (meByGroupCache[id] ? resolverNomePessoa(meByGroupCache[id]) : null);
+    ? (pessoas.includes(g.meuParticipante) ? g.meuParticipante : null)
+    : (meByGroupCache[id] ? (pessoas.includes(meByGroupCache[id]) ? meByGroupCache[id] : null) : null);
 
   if (!meuParticipante && currentUserName && pessoas.length > 0) {
     const alvo = normalizarTexto(currentUserName);
@@ -714,6 +690,8 @@ function normalizarEstruturaGrupo(id, raw) {
     pessoas,
     participantesSemApp,
     meuParticipante,
+    members: membrosReais(g),
+    vinculos: { ...(g.vinculos || {}) },
     gastos: gastosNormalizados,
     taxasCambio: g.taxasCambio && typeof g.taxasCambio === 'object' ? g.taxasCambio : {}
   };
@@ -875,15 +853,39 @@ function atualizarMembros(tx, ref, data, membros) {
   }
 }
 
-async function ingressarGrupo(id, uid) {
-  await runTransaction(db, async tx => {
-    const ref = getGroupDocRef(id);
-    const snap = await tx.get(ref);
-    if (!snap.exists() || snap.data().deleted) throw new Error('Group unavailable');
-    const data = snap.data();
-    const membros = membrosReais(data);
+async function ingressarGrupo(id, uid, escolha, nomeNovo) {
+  return runTransaction(db, async tx => {
+    const ref = getGroupDocRef(id), perfilRef = getUserProfileRef(uid);
+    const snap = await tx.get(ref), perfil = await tx.get(perfilRef);
+    if (!snap.exists() || snap.data().deleted || !perfil.exists()) throw new Error('Group unavailable');
+    const data = snap.data(), membros = membrosReais(data);
+    const vinculos = { ...(data.vinculos || {}) };
+    const pessoas = [...(data.pessoas || [])];
+    let nome = vinculos[uid];
+    if (!membros[uid] || !nome || !pessoas.includes(nome)) {
+      if (escolha === null) throw new Error('Selection required');
+      nome = escolha || nomeNovo;
+      if (!nome || Object.entries(vinculos).some(([u,p]) => u !== uid && normalizarTexto(p) === normalizarTexto(nome))) throw new Error('Participant unavailable');
+      if (escolha) {
+        if (!participantesDisponiveis(data, uid).includes(escolha)) throw new Error('Participant unavailable');
+        const legado = Object.keys(membros).some(u => u !== uid && !vinculos[u]);
+        if (legado && !(data.participantesSemApp || []).includes(escolha)) throw new Error('Legacy participant unavailable');
+      }
+      else { if (pessoas.some(p => normalizarTexto(p) === normalizarTexto(nome))) throw new Error('Duplicate participant'); pessoas.push(nome); }
+      vinculos[uid] = nome;
+    }
     membros[uid] = true;
     atualizarMembros(tx, ref, data, membros);
+    const semApp = (data.participantesSemApp || []).filter(p => p !== nome);
+    const grupo = normalizarEstruturaGrupo(id, { ...data, pessoas, vinculos, members: membros, participantesSemApp: semApp });
+    if ((!membrosReais(data)[uid] || !pessoas.includes(data.vinculos?.[uid])) && escolha && nomeNovo && nomeNovo !== nome) {
+      if (grupo.pessoas.some(p => p !== nome && normalizarTexto(p) === normalizarTexto(nomeNovo))) throw new Error('Duplicate participant');
+      renomearNomeEmGrupo(grupo, nome, nomeNovo);
+      grupo.vinculos[uid] = nomeNovo;
+    }
+    tx.update(ref, { pessoas: grupo.pessoas, vinculos: grupo.vinculos, participantesSemApp: grupo.participantesSemApp, gastos: grupo.gastos, meuParticipante: grupo.meuParticipante || null });
+    tx.update(perfilRef, { groupIds: [...new Set([...(perfil.data().groupIds || []), id])], activeGroupId: id, updatedAt: Date.now() });
+    return grupo;
   });
 }
 
@@ -917,9 +919,11 @@ async function salvarGrupoNaNuvem(grupo) {
     await runTransaction(db, async tx => {
       const snap = await tx.get(groupRef);
       if (!snap.exists() || snap.data().deleted || !membrosReais(snap.data())[currentUser.uid]) throw new Error('Group unavailable');
+      const remoto = snap.data();
+      if (JSON.stringify(remoto.vinculos || {}) !== JSON.stringify(grupo.vinculos || {})) throw new Error("Participant links changed; reload group");
       tx.update(groupRef, payload);
     });
-    cloudGroupsCache[grupo.id] = normalizarEstruturaGrupo(grupo.id, payload);
+    cloudGroupsCache[grupo.id] = normalizarEstruturaGrupo(grupo.id, { ...payload, members: grupo.members, vinculos: grupo.vinculos });
     const agora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     setSaveStatus('statusSyncedAt', { time: agora });
   } catch (err) {
@@ -934,7 +938,7 @@ async function salvarGrupoNaNuvem(grupo) {
 
 function renomearNomeEmGrupo(grupo, nomeAntigo, nomeNovo) {
   if (!grupo || !nomeAntigo || !nomeNovo) return false;
-  if (normalizarTexto(nomeAntigo) === normalizarTexto(nomeNovo)) return false;
+  if (nomeAntigo === nomeNovo) return false;
 
   let alterou = false;
   const alvoAntigo = normalizarTexto(nomeAntigo);
@@ -950,7 +954,7 @@ function renomearNomeEmGrupo(grupo, nomeAntigo, nomeNovo) {
   };
 
   if (Array.isArray(grupo.pessoas)) {
-    const jaTemNovo = grupo.pessoas.some(p => normalizarTexto(p) === alvoNovo);
+    const jaTemNovo = grupo.pessoas.some(p => normalizarTexto(p) === alvoNovo && normalizarTexto(p) !== alvoAntigo);
     const mapeadas = [];
     for (const p of grupo.pessoas) {
       if (p === nomeAntigo || normalizarTexto(p) === alvoAntigo) {
@@ -1040,32 +1044,11 @@ function renomearNomeEmGrupo(grupo, nomeAntigo, nomeNovo) {
 }
 
 async function atualizarMeuNomeEmTodosOsGrupos() {
-  const grupoAtivo = getGrupoAtivo();
-  const nomeAtual = getMeParticipantName(grupoAtivo) || getNomeUsuarioEfetivo() || '';
-  const entrada = prompt(t('editMyNamePrompt'), nomeAtual);
-  if (entrada === null) return;
-
-  const novoNome = entrada.trim();
-  if (!novoNome) {
-    alert(t('myNameEmptyAlert'));
-    return;
-  }
-
-  await persistirNomeNoPerfil(novoNome);
-
-  const grupos = Object.values(state.grupos || {});
-  for (const grupo of grupos) {
-    const nomeAntigoNoGrupo = getMeParticipantName(grupo) || nomeAtual;
-    if (nomeAntigoNoGrupo) {
-      renomearNomeEmGrupo(grupo, nomeAntigoNoGrupo, novoNome);
-    }
-    garantirUsuarioLogadoNoGrupo(grupo);
-    await salvarGrupoNaNuvem(grupo);
-  }
-
+  const nome = await solicitarNomeNovoGrupo({ perfil: true, nomeAtual: getNomeUsuarioEfetivo() });
+  if (!nome) return;
+  await persistirNomeNoPerfil(nome);
   renderAuthUI();
   renderTudo();
-  alert(t('myNameUpdatedAlert', { name: novoNome }));
 }
 
 function assinarGrupoAtivo(groupId) {
@@ -1096,6 +1079,22 @@ function assinarGrupoAtivo(groupId) {
   });
 }
 
+async function migrarVinculoLegado(id, data) {
+  const uid = currentUser.uid;
+  if (!membrosReais(data)[uid] || data.vinculos?.[uid]) return data;
+  const candidato = (data.pessoas || []).find(p => normalizarTexto(p) === normalizarTexto(getNomeUsuarioEfetivo()));
+  if (!candidato || Object.values(data.vinculos || {}).includes(candidato) || (data.participantesSemApp || []).includes(candidato)) return data;
+  return runTransaction(db, async tx => {
+    const ref = getGroupDocRef(id), snap = await tx.get(ref);
+    if (!snap.exists()) return data;
+    const atual = snap.data(), vinculos = { ...(atual.vinculos || {}) };
+    if (!membrosReais(atual)[uid] || vinculos[uid] || Object.values(vinculos).includes(candidato) || !(atual.pessoas || []).includes(candidato) || (atual.participantesSemApp || []).includes(candidato)) return atual;
+    vinculos[uid] = candidato;
+    tx.update(ref, { vinculos });
+    return { ...atual, vinculos };
+  });
+}
+
 async function carregarGruposDoUsuario(userData) {
   if (!currentUser) return;
   const groupIds = Array.isArray(userData?.groupIds) ? userData.groupIds : [];
@@ -1122,7 +1121,7 @@ async function carregarGruposDoUsuario(userData) {
     try {
       const snap = await getDoc(getGroupDocRef(gid));
       if (snap.exists()) {
-        const norm = normalizarEstruturaGrupo(gid, snap.data());
+        const norm = normalizarEstruturaGrupo(gid, await migrarVinculoLegado(gid, snap.data()));
         novosGrupos[gid] = norm;
         cloudGroupsCache[gid] = norm;
       }
@@ -1160,33 +1159,12 @@ async function carregarGruposDoUsuario(userData) {
 }
 
 async function processarConviteDaURL() {
-  const params = new URLSearchParams(window.location.search);
-  const inviteGroupId = params.get('grupo') || params.get('group');
-  if (!inviteGroupId || !currentUser) return;
-
-  const cleanId = inviteGroupId.trim();
+  const params = new URLSearchParams(location.search);
+  if (!currentUser || !(params.has('grupo') || params.has('group') || params.has('convite'))) return;
   try {
-    const snap = await getDoc(getGroupDocRef(cleanId));
-    if (snap.exists()) {
-      const norm = normalizarEstruturaGrupo(cleanId, snap.data());
-      state.grupos[cleanId] = norm;
-      cloudGroupsCache[cleanId] = norm;
-      state.grupoAtivoId = cleanId;
-      await ingressarGrupo(cleanId, currentUser.uid);
-      await vincularGrupoAoUsuario(currentUser.uid, cleanId, true);
-      salvarEstadoLocal();
-      assinarGrupoAtivo(cleanId);
-      history.replaceState(estadoNavegacao('lista'), '', window.location.pathname);
-      abrirTelaDetalheGrupo(cleanId);
-    } else {
-      alert(t('groupNotFoundAlert'));
-    }
-  } catch (e) {
-    console.warn('Erro ao processar convite da URL:', e);
-  } finally {
-    const urlLimpa = window.location.origin + window.location.pathname;
-    window.history.replaceState(history.state, document.title, urlLimpa);
-  }
+    await abrirConvites(params);
+    history.replaceState(history.state, document.title, location.pathname);
+  } catch (e) { console.error(e); alert(t('multiError')); }
 }
 
 function assinarPerfilUsuario(uid) {
@@ -1956,6 +1934,10 @@ async function excluirOuSairDoGrupo() {
         tx.delete(ref);
       } else {
         delete ativos[uid];
+        const vinculos = { ...(data.vinculos || {}) };
+        const nome = vinculos[uid];
+        delete vinculos[uid];
+        tx.update(ref, { vinculos, participantesSemApp: [...new Set([...(data.participantesSemApp || []), ...(nome ? [nome] : [])])] });
         atualizarMembros(tx, ref, data, ativos);
       }
       const ids = (perfil.data().groupIds || []).filter(id => id !== grupo.id);
@@ -1987,10 +1969,10 @@ async function excluirOuSairDoGrupo() {
 }
 
 // Abre o convite sem alertas do navegador; mantém o link original do grupo.
-function compartilharConviteGrupo() {
+function compartilharConviteGrupo(linkPersonalizado = null) {
   const grupo = getGrupoAtivo();
   if (!grupo) return;
-  const link = `${window.location.origin}${window.location.pathname}?grupo=${encodeURIComponent(grupo.id)}`;
+  const link = typeof linkPersonalizado === "string" ? linkPersonalizado : `${window.location.origin}${window.location.pathname}?grupo=${encodeURIComponent(grupo.id)}`;
   const modal = document.getElementById('modal-convite');
   const campo = document.getElementById('convite-link');
   const feedback = document.getElementById('convite-feedback');
@@ -2038,43 +2020,161 @@ function compartilharConviteGrupo() {
 }
 
 async function entrarPorCodigoOuLink() {
-  const raw = prompt(t('enterCodePrompt'));
-  if (!raw || !raw.trim()) return;
-  let codigo = raw.trim();
+  const raw = prompt(t('enterCodePrompt'))?.trim();
+  if (!raw || !currentUser) return;
   try {
-    if (codigo.includes('http') || codigo.includes('?')) {
-      const urlObj = new URL(codigo.startsWith('http') ? codigo : `https://x.com/${codigo}`);
-      codigo = urlObj.searchParams.get('grupo') || urlObj.searchParams.get('group') || codigo;
-    }
-  } catch {}
-  codigo = codigo.trim();
-  if (/^[a-hj-np-z2-9]{8}$/i.test(codigo)) codigo = codigo.toUpperCase();
-  if (!codigo) return;
-
-  try {
-    const snap = await getDoc(getGroupDocRef(codigo));
-    if (!snap.exists()) {
-      alert(t('groupNotFoundAlert'));
-      return;
-    }
-    const norm = normalizarEstruturaGrupo(codigo, snap.data());
-    state.grupos[codigo] = norm;
-    cloudGroupsCache[codigo] = norm;
-    state.grupoAtivoId = codigo;
-    if (currentUser) {
-      await ingressarGrupo(codigo, currentUser.uid);
-      await vincularGrupoAoUsuario(currentUser.uid, codigo, true);
-    }
-    salvarEstadoLocal();
-    assinarGrupoAtivo(codigo);
-    abrirTelaDetalheGrupo(codigo);
-  } catch (e) {
-    console.error('Erro ao entrar por código:', e);
-    alert(t('groupNotFoundAlert'));
-  }
+    const params = raw.includes('?') ? new URL(raw, location.href).searchParams : new URLSearchParams({grupo: /^[a-hj-np-z2-9]{8}$/i.test(raw) ? raw.toUpperCase() : raw});
+    await abrirConvites(params);
+  } catch (e) { console.error(e); alert(t('multiError')); }
 }
 
-// ===== 12. PARTICIPANTES E SEM APP =====
+// ===== 12. PARTICIPANTES E CONVITES =====
+function modalSelecao(titulo, montar) {
+  const modal = document.getElementById('modal-v26'), corpo = document.getElementById('v26-corpo');
+  document.getElementById('v26-titulo').textContent = titulo;
+  corpo.replaceChildren();
+  modal.classList.remove('hidden');
+  return new Promise(resolve => {
+    const fechar = valor => { modal.classList.add('hidden'); modal.onclick = null; document.removeEventListener('keydown', tecla); resolve(valor); };
+    const tecla = e => { if (e.key === 'Escape') fechar(null); };
+    modal.onclick = e => { if (e.target === modal || e.target.closest('#v26-cancelar')) fechar(null); };
+    document.addEventListener('keydown', tecla);
+    montar(corpo, fechar);
+  });
+}
+function botaoV26(corpo, texto, acao) {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'btn-primary'; b.textContent = texto; b.onclick = acao; corpo.append(b);
+}
+async function criarConviteMultiplo() {
+  if (!currentUser) return;
+  const ids = await modalSelecao(t('multiInvite'), (corpo, fechar) => {
+    const caixas = [];
+    const linha = (nome, id) => { const l = document.createElement('label'), c = document.createElement('input'); c.type = 'checkbox'; c.checked = true; l.style.display = 'block'; l.append(c, ' ' + nome); corpo.append(l); if (id) caixas.push([id,c]); return c; };
+    const todos = linha(t('multiAll'));
+    for (const g of Object.values(state.grupos)) linha(g.nome, g.id);
+    todos.onchange = () => caixas.forEach(([,c]) => c.checked = todos.checked);
+    caixas.forEach(([,c]) => c.onchange = () => { todos.checked = caixas.every(([,x]) => x.checked); });
+    botaoV26(corpo, t('multiGenerate'), () => { const ids = caixas.filter(([,c]) => c.checked).map(([id]) => id); if (ids.length) fechar(ids); });
+  });
+  if (!ids) return;
+  try {
+    const codigo = crypto.randomUUID();
+    await setDoc(doc(db, 'convitesMultiplos', codigo), { groupIds: ids, createdBy: currentUser.uid, expiresAt: Date.now() + 7*86400000 - 60000 });
+    compartilharConviteGrupo(`${location.origin}${location.pathname}?convite=${codigo}`);
+  } catch (e) { console.error(e); alert(t(e.code === 'permission-denied' ? 'multiPermissionError' : 'multiError')); }
+}
+// Exclui nomes vinculados e protege participantes legados sem UID identificado.
+function participantesDisponiveis(data, uid) {
+  const ocupados = new Set(Object.entries(data.vinculos || {}).filter(([u]) => u !== uid).map(([,nome]) => normalizarTexto(nome)));
+  const legados = Object.keys(membrosReais(data)).some(u => u !== uid && !data.vinculos?.[u]);
+  return (data.pessoas || []).filter(nome => !ocupados.has(normalizarTexto(nome)) &&
+    (!legados || (data.participantesSemApp || []).includes(nome)));
+}
+
+// Campos compartilhados entre ingresso por convite e importação.
+function camposParticipante(corpo, nomes) {
+  const select = document.createElement('select'), input = document.createElement('input');
+  select.style.width = input.style.width = '100%'; input.type = 'text';
+  const opcao = (v,n) => { const o = document.createElement('option'); o.value=v; o.textContent=n; select.append(o); };
+  // Exige escolha explícita quando existem participantes disponíveis.
+  if (nomes.length) {
+    opcao('__selecionar__', t('chooseExistingParticipant'));
+    select.options[0].disabled = true;
+  }
+  for (const nome of nomes) {
+    opcao(nome,nome);
+  }
+  opcao('', t('multiNew'));
+  if (nomes.length) select.value = '__selecionar__';
+  const atualizar = () => {
+    input.disabled = select.value === '__selecionar__';
+    input.value = input.disabled ? '' : (select.value || getNomeUsuarioEfetivo());
+  };
+  select.onchange=atualizar; atualizar();
+  const label = document.createElement('label'); label.textContent=t('multiName');
+  const instrucao = document.createElement('label'); instrucao.textContent = t('chooseExistingParticipant');
+  select.size = Math.min(nomes.length + (nomes.length ? 2 : 1), 6);
+  corpo.append(instrucao,select,label,input);
+  return {select,input};
+}
+
+// Confirma identidades de todos os grupos antes de gravar qualquer importação.
+async function selecionarParticipantesImportacao(grupos) {
+  return modalSelecao(t('importParticipantTitle'), (corpo, fechar) => {
+    const campos = grupos.map(grupo => {
+      const titulo = document.createElement('h3'); titulo.textContent = grupo.nome; corpo.append(titulo);
+      return {grupo, ...camposParticipante(corpo, grupo.pessoas)};
+    });
+    botaoV26(corpo, t('importParticipantConfirm'), () => {
+      for (const {grupo,select,input} of campos) {
+        const nome = input.value.trim();
+        if (select.value === '__selecionar__' || !nome || grupo.pessoas.some(p => p !== select.value && normalizarTexto(p) === normalizarTexto(nome))) {
+          alert(t('importParticipantDuplicate')); return;
+        }
+      }
+      fechar(campos.map(({select,input}) => ({escolha:select.value,nome:input.value.trim()})));
+    });
+  });
+}
+
+async function abrirConvites(params) {
+  let ids = [params.get('grupo') || params.get('group')].filter(Boolean);
+  if (params.has('convite')) {
+    const snap = await getDoc(doc(db, 'convitesMultiplos', params.get('convite')));
+    if (!snap.exists() || snap.data().expiresAt <= Date.now()) throw new Error('Expired invite');
+    ids = [...new Set(snap.data().groupIds || [])];
+  }
+  if (!ids.length) throw new Error('Empty invite');
+  const uid = currentUser.uid, pendentes = [];
+  for (const id of ids) {
+    const snap = await getDoc(getGroupDocRef(id));
+    if (!snap.exists() || snap.data().deleted) throw new Error('Group unavailable');
+    pendentes.push({ id, data: snap.data() });
+  }
+  const escolhas = await modalSelecao(t('multiJoin'), (corpo, fechar) => {
+    const campos = [];
+    for (const {id,data} of pendentes) {
+      const titulo = document.createElement('h3'); titulo.textContent = data.nome; corpo.append(titulo);
+      if (membrosReais(data)[uid] && data.vinculos?.[uid] && data.pessoas.includes(data.vinculos[uid])) { campos.push({id, existente:true}); continue; }
+      campos.push({id, ...camposParticipante(corpo, participantesDisponiveis(data, uid))});
+    }
+    botaoV26(corpo,t('multiConfirm'),() => { if (campos.some(c => !c.existente && (c.select.value === '__selecionar__' || !c.input.value.trim()))) return; fechar(campos.map(c => ({id:c.id, escolha:c.existente?null:c.select.value, nome:c.existente?null:c.input.value.trim()}))); });
+  });
+  if (!escolhas) return;
+  let primeiro = null;
+  for (const e of escolhas) {
+    let grupo = await ingressarGrupo(e.id, uid, e.escolha, e.nome);
+
+    state.grupos[e.id] = cloudGroupsCache[e.id] = grupo;
+    primeiro ||= e.id;
+  }
+  if (primeiro) { state.grupoAtivoId=primeiro; salvarEstadoLocal(); assinarGrupoAtivo(primeiro); if (ids.length===1) abrirTelaDetalheGrupo(primeiro); else abrirTelaListaGrupos(); }
+}
+async function renomearMeuNomeV26(id, nome) {
+  const uid = currentUser.uid;
+  return runTransaction(db, async tx => {
+    const ref = getGroupDocRef(id), snap = await tx.get(ref);
+    if (!snap.exists() || !membrosReais(snap.data())[uid]) throw new Error('Group unavailable');
+    const data = snap.data(), grupo = normalizarEstruturaGrupo(id,data);
+    const antigo = getMeParticipantName(grupo);
+    if (!antigo || grupo.pessoas.some(p => p !== antigo && normalizarTexto(p) === normalizarTexto(nome))) throw new Error('Duplicate or unavailable participant');
+    renomearNomeEmGrupo(grupo, antigo, nome);
+    grupo.vinculos[uid] = nome;
+    tx.update(ref, { pessoas:grupo.pessoas, gastos:grupo.gastos, participantesSemApp:grupo.participantesSemApp, vinculos:grupo.vinculos, meuParticipante:grupo.meuParticipante || null });
+    return grupo;
+  });
+}
+async function editarMeuNomeV26() {
+  const grupo = getGrupoAtivo();
+  const atual = getMeParticipantName(grupo);
+  if (!atual) { try { await abrirConvites(new URLSearchParams({grupo:grupo.id})); } catch(e) { console.error(e); alert(t('multiError')); } return; }
+  const nome = await modalSelecao(t('groupMyName'), (corpo,fechar) => { const input=document.createElement('input'); input.value=atual; input.style.width='100%'; corpo.append(input); botaoV26(corpo,t('saveGroupName'),()=>{if(input.value.trim()) fechar(input.value.trim());}); });
+  if (!nome) return;
+  try { state.grupos[grupo.id] = await renomearMeuNomeV26(grupo.id,nome); renderTudo(); } catch(e) { console.error(e); alert(t('multiError')); }
+}
+
+
+
 async function adicionarParticipante(nomeRaw, { marcarComoEu = false, semApp = false } = {}) {
   const nome = String(nomeRaw || '').trim();
   if (!nome) return false;
@@ -2110,6 +2210,7 @@ async function adicionarParticipante(nomeRaw, { marcarComoEu = false, semApp = f
 
 async function removerParticipante(nome) {
   const grupo = getGrupoAtivo();
+  if (Object.values(grupo.vinculos || {}).includes(nome)) { alert(t('multiError')); return; }
   const emUso = grupo.gastos.some(g => {
     if (g.tipo === 'pagamento') return g.de === nome || g.para === nome;
     if (g.pagador === nome) return true;
@@ -3992,8 +4093,15 @@ async function persistirGruposImportados(entradas, { novoCodigo = false } = {}) 
   if (!Array.isArray(entradas) || entradas.length === 0) return null;
 
   let primeiroIdNovo = null;
+  entradas = entradas.filter(e => e.gdata && typeof e.gdata === 'object');
+  let escolhas = null;
+  if (novoCodigo && currentUser) {
+    const grupos = entradas.map(({gdata}) => normalizarEstruturaGrupo(gdata.id || '', gdata));
+    escolhas = await selecionarParticipantesImportacao(grupos);
+    if (!escolhas) return false;
+  }
 
-  for (const { chaveOriginal, gdata } of entradas) {
+  for (const [indice, { chaveOriginal, gdata }] of entradas.entries()) {
     if (!gdata || typeof gdata !== 'object') continue;
 
     const idCandidato = (typeof gdata.id === 'string' && gdata.id.trim())
@@ -4003,9 +4111,17 @@ async function persistirGruposImportados(entradas, { novoCodigo = false } = {}) 
     let gid = state.grupos[idCandidato] ? gerarId('grp') : idCandidato;
     let norm = normalizarEstruturaGrupo(gid, { ...gdata, id: gid });
     if (novoCodigo) {
-      norm = await reservarNovoGrupo(norm);
+      const escolha = escolhas?.[indice];
+      if (escolha) {
+        if (escolha.escolha) renomearNomeEmGrupo(norm, escolha.escolha, escolha.nome);
+        else norm.pessoas.push(escolha.nome);
+        norm.meuParticipante = escolha.nome;
+        norm.participantesSemApp = norm.pessoas.filter(p => p !== escolha.nome);
+      }
+      norm = await reservarNovoGrupo(norm, currentUser?.uid, escolha?.nome);
       gid = norm.id;
     }
+    if (!novoCodigo && currentUser) { norm.members = { [currentUser.uid]: true }; norm.vinculos = {}; }
     state.grupos[gid] = norm;
     cloudGroupsCache[gid] = norm;
 
@@ -4024,6 +4140,7 @@ async function persistirGruposImportados(entradas, { novoCodigo = false } = {}) 
         taxasCambio: norm.taxasCambio || {},
         deleted: false,
         members: { [currentUser.uid]: true },
+        vinculos: {},
         updatedAt: Date.now(),
         updatedBy: currentUser.uid
       }, { merge: true });
@@ -4085,6 +4202,10 @@ async function importarBackupJSON(file) {
     }
 
     const importadoId = await persistirGruposImportados(entradas, { novoCodigo });
+    if (importadoId === false) {
+      setSaveStatus('statusSyncedAt', { time: new Date().toLocaleTimeString() });
+      return;
+    }
     if (!importadoId) {
       setSaveStatus('statusSaveError');
       alert('Falha ao importar os grupos do arquivo.');
@@ -4110,7 +4231,9 @@ async function processarImportacaoPendenteSplitwise() {
   try {
     const parsed = JSON.parse(raw);
     const entradas = extrairGruposDeJSON(parsed);
-    if (await persistirGruposImportados(entradas, { novoCodigo: true })) localStorage.removeItem(SPLITWISE_IMPORT_KEY);
+    const resultado = await persistirGruposImportados(entradas, { novoCodigo: true });
+    if (resultado || resultado === false) localStorage.removeItem(SPLITWISE_IMPORT_KEY);
+    if (resultado === false) setSaveStatus('statusSyncedAt', { time: new Date().toLocaleTimeString() });
   } catch (e) {
     console.error('Erro ao importar grupo pendente do Splitwise:', e);
     setSaveStatus('statusSaveError');
@@ -4286,6 +4409,8 @@ function initListeners() {
     await excluirOuSairDoGrupo();
   });
 
+  document.getElementById('btn-multi-invite')?.addEventListener('click', () => { setMenu3DotsHomeAberto(false); criarConviteMultiplo(); });
+  document.getElementById('btn-group-my-name')?.addEventListener('click', () => { setMenu3DotsAberto(false); editarMeuNomeV26(); });
   document.getElementById('btn-compartilhar-grupo')?.addEventListener('click', compartilharConviteGrupo);
 
   const acionarEntrarCodigo = async () => {
