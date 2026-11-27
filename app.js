@@ -155,6 +155,7 @@ function abrirTelaDetalheGrupo(groupId) {
   document.getElementById('view-detalhe-grupo')?.classList.remove('hidden');
   renderTudo();
 }
+
 function abrirFormularioDeNovoGasto() {
   cancelarEdicao();
   setFormGastoVisivel(true);
@@ -181,7 +182,7 @@ async function selecionarGrupoParaNovoGasto(grupoEscolhido) {
 }
 
 async function aoClicarNovoGastoNaHome() {
-  const gruposAtivos = Object.values(state.grupos || {}).filter(g => g && !g.deleted);
+  const gruposAtivos = getGruposOrdenados();
 
   if (gruposAtivos.length === 0) {
     await criarNovoGrupo();
@@ -220,6 +221,7 @@ async function aoClicarNovoGastoNaHome() {
 
   modalEl.classList.remove('hidden');
 }
+
 // ==================== UTILITÁRIOS DE IDENTIDADE ("EU") ====================
 function salvarNomeUsuarioLocal(nome) {
   const limpo = String(nome || '').trim();
@@ -449,6 +451,7 @@ function criarGrupoPadrao(id = DEFAULT_GROUP_ID, nome = 'Grupo Principal') {
   return {
     id,
     nome,
+    order: 0,
     image: null,
     pessoas: [],
     participantesSemApp: [],
@@ -770,7 +773,7 @@ async function salvarGrupoNaNuvem(grupo) {
 
   try {
     const groupRef = getGroupDocRef(grupo.id);
-   const payload = {
+    const payload = {
       id: grupo.id,
       nome: grupo.nome,
       order: typeof grupo.order === 'number' ? grupo.order : 0,
@@ -1447,6 +1450,7 @@ function getTextoSaldoUsuarioNoGrupo(grupo) {
     classe: 'neutro'
   };
 }
+
 function getGruposOrdenados() {
   const lista = Object.values(state.grupos || {}).filter(g => g && !g.deleted);
   return lista
@@ -1503,10 +1507,10 @@ function anexarDragReordenacaoGrupo(itemEl, grupoId, listaEl) {
     ev.preventDefault();
     itemEl.style.transform = `translateY(${deltaY}px) scale(1.015)`;
 
-    const irmãos = Array.from(listaEl.querySelectorAll('.group-list-item')).filter(el => el !== itemEl);
+    const irmaos = Array.from(listaEl.querySelectorAll('.group-list-item')).filter(el => el !== itemEl);
     alvoAlvoId = null;
 
-    for (const outro of irmãos) {
+    for (const outro of irmaos) {
       outro.classList.remove('drag-over-top', 'drag-over-bottom');
       const rect = outro.getBoundingClientRect();
       const meioY = rect.top + rect.height / 2;
@@ -1573,6 +1577,7 @@ function anexarDragReordenacaoGrupo(itemEl, grupoId, listaEl) {
     }
   }, true);
 }
+
 function renderSeletorGrupos() {
   const grupo = getGrupoAtivo();
   const listaEl = document.getElementById('lista-grupos');
@@ -1668,6 +1673,7 @@ async function criarNovoGrupo() {
   if (!nome || !nome.trim()) return;
   const id = gerarId('grp');
   const novoGrupo = criarGrupoPadrao(id, nome.trim());
+  novoGrupo.order = getGruposOrdenados().length;
 
   let nomeUsuario = getNomeUsuarioEfetivo();
   if (!nomeUsuario) {
@@ -2789,7 +2795,7 @@ function renderHistorico() {
           <small>${escapeHTML(dataText + (g.descricao || t('settlementDefaultDesc')) + obsText)}</small>
         </div>
         <div class="gasto-right">
-          <span class="gasto-valor pagamento-val">${escapeHTML(formatMoney(valBRL, 'BRL'))}</span>
+          <span class="gasto-valor pagamento-val">${escapeHTML(valorDisplay)}</span>
           <button type="button" class="btn-icon-action btn-del-gasto" title="Apagar">🗑</button>
         </div>
       `;
@@ -2952,7 +2958,100 @@ function renderPainelTotais() {
   `;
 }
 
-// ==================== MODAL QUITAR CONTA ====================
+// ==================== MODAL QUITAR CONTA (COM MULTI-MOEDAS DO APP) ====================
+function sincronizarMoedasQuitar() {
+  const origem = document.getElementById('moeda-gasto');
+  const destino = document.getElementById('quitar-moeda');
+  if (!origem || !destino) return;
+
+  const valorAtual = destino.value;
+  destino.innerHTML = '';
+  Array.from(origem.options).forEach(opt => {
+    destino.appendChild(opt.cloneNode(true));
+  });
+
+  if (valorAtual && Array.from(destino.options).some(o => o.value === valorAtual)) {
+    destino.value = valorAtual;
+  } else {
+    destino.value = 'BRL';
+  }
+}
+
+function getTaxaQuitar() {
+  const moeda = document.getElementById('quitar-moeda')?.value || 'BRL';
+  if (moeda === 'BRL') return 1;
+
+  const taxaDigitada = parseFloat(document.getElementById('quitar-taxa-cambio')?.value);
+  if (!isNaN(taxaDigitada) && taxaDigitada > 0) return taxaDigitada;
+
+  const grupo = getGrupoAtivo();
+  const taxaSalva = grupo?.taxasCambio?.[moeda];
+  if (typeof taxaSalva === 'number' && taxaSalva > 0) return taxaSalva;
+
+  return 1;
+}
+
+function atualizarUIQuitarMoeda() {
+  const moeda = document.getElementById('quitar-moeda')?.value || 'BRL';
+  const boxCambio = document.getElementById('quitar-box-cambio');
+  const moedaLabel = document.getElementById('quitar-cambio-moeda');
+  const taxaInput = document.getElementById('quitar-taxa-cambio');
+  const valorInput = document.getElementById('quitar-valor');
+  const convertidoEl = document.getElementById('quitar-valor-convertido-brl');
+
+  if (moeda === 'BRL') {
+    boxCambio?.classList.add('hidden');
+    return;
+  }
+
+  boxCambio?.classList.remove('hidden');
+  if (moedaLabel) moedaLabel.textContent = moeda;
+
+  const grupo = getGrupoAtivo();
+  if (taxaInput && (!taxaInput.value || parseFloat(taxaInput.value) <= 0)) {
+    const salva = grupo?.taxasCambio?.[moeda];
+    if (typeof salva === 'number' && salva > 0) {
+      taxaInput.value = salva;
+    }
+  }
+
+  const valor = parseFloat(valorInput?.value) || 0;
+  const taxa = getTaxaQuitar();
+  if (convertidoEl) {
+    convertidoEl.textContent = formatMoney(valor * taxa, 'BRL');
+  }
+}
+
+async function buscarCotacaoQuitar() {
+  const moeda = document.getElementById('quitar-moeda')?.value || 'BRL';
+  if (moeda === 'BRL') return;
+
+  const statusEl = document.getElementById('quitar-cambio-status');
+  const taxaInput = document.getElementById('quitar-taxa-cambio');
+  if (statusEl) statusEl.textContent = t('fetchingRateMsg');
+
+  try {
+    const res = await fetch(`https://open.er-api.com/v6/latest/${encodeURIComponent(moeda)}`);
+    if (!res.ok) throw new Error('Falha na API de câmbio');
+    const data = await res.json();
+    const rate = data?.rates?.BRL;
+    if (typeof rate !== 'number' || rate <= 0) throw new Error('Cotação inválida');
+
+    const rounded = Number(rate.toFixed(6));
+    if (taxaInput) taxaInput.value = rounded;
+
+    const grupo = getGrupoAtivo();
+    grupo.taxasCambio = grupo.taxasCambio || {};
+    grupo.taxasCambio[moeda] = rounded;
+    await salvarGrupoNaNuvem(grupo);
+
+    atualizarUIQuitarMoeda();
+    if (statusEl) statusEl.textContent = t('rateFetchedMsg', { curr: moeda });
+  } catch {
+    if (statusEl) statusEl.textContent = t('rateErrorMsg');
+  }
+}
+
 function abrirModalQuitar(dePadrao = '', paraPadrao = '', valorPadrao = '') {
   const grupo = getGrupoAtivo();
   if (!grupo.pessoas || grupo.pessoas.length < 2) {
@@ -2960,8 +3059,13 @@ function abrirModalQuitar(dePadrao = '', paraPadrao = '', valorPadrao = '') {
     return;
   }
 
+  sincronizarMoedasQuitar();
+
   const selDe = document.getElementById('quitar-de');
   const selPara = document.getElementById('quitar-para');
+  const selMoeda = document.getElementById('quitar-moeda');
+  const inpTaxa = document.getElementById('quitar-taxa-cambio');
+  const statusEl = document.getElementById('quitar-cambio-status');
   const inpVal = document.getElementById('quitar-valor');
   const inpObs = document.getElementById('quitar-obs');
 
@@ -2987,8 +3091,12 @@ function abrirModalQuitar(dePadrao = '', paraPadrao = '', valorPadrao = '') {
     selPara.selectedIndex = selDe.selectedIndex === 0 ? 1 : 0;
   }
 
+  if (selMoeda) selMoeda.value = 'BRL';
+  if (inpTaxa) inpTaxa.value = '';
+  if (statusEl) statusEl.textContent = '';
   if (inpVal) inpVal.value = valorPadrao || '';
   if (inpObs) inpObs.value = '';
+  atualizarUIQuitarMoeda();
 
   document.getElementById('modal-quitar')?.classList.remove('hidden');
 }
@@ -3625,6 +3733,7 @@ async function persistirGruposImportados(entradas) {
       await setDoc(getGroupDocRef(gid), {
         id: norm.id,
         nome: norm.nome,
+        order: typeof norm.order === 'number' ? norm.order : 0,
         image: norm.image || null,
         pessoas: norm.pessoas || [],
         participantesSemApp: norm.participantesSemApp || [],
@@ -3706,6 +3815,7 @@ async function importarBackupJSON(file) {
     }, 400);
   }
 }
+
 async function processarImportacaoPendenteSplitwise() {
   const raw = localStorage.getItem(SPLITWISE_IMPORT_KEY);
   if (!raw) return;
@@ -3792,11 +3902,13 @@ function renderTudo() {
 
 // ==================== EVENT LISTENERS ====================
 function initListeners() {
+  sincronizarMoedasQuitar();
+
   document.getElementById('btn-novo-gasto-grupo')?.addEventListener('click', (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  abrirFormularioDeNovoGasto();
-});
+    e.preventDefault();
+    e.stopPropagation();
+    abrirFormularioDeNovoGasto();
+  });
   document.getElementById('btn-voltar-grupos')?.addEventListener('click', abrirTelaListaGrupos);
 
   // Menu de 3 tracinhos (Dentro do Grupo)
@@ -4092,10 +4204,22 @@ function initListeners() {
   document.getElementById('btn-fechar-quitar')?.addEventListener('click', fecharModalQuitar);
   document.getElementById('btn-cancelar-quitar')?.addEventListener('click', fecharModalQuitar);
 
+  document.getElementById('quitar-moeda')?.addEventListener('change', async (e) => {
+    atualizarUIQuitarMoeda();
+    if (e.target.value !== 'BRL') {
+      await buscarCotacaoQuitar();
+    }
+  });
+
+  document.getElementById('btn-quitar-buscar-cotacao')?.addEventListener('click', buscarCotacaoQuitar);
+  document.getElementById('quitar-valor')?.addEventListener('input', atualizarUIQuitarMoeda);
+  document.getElementById('quitar-taxa-cambio')?.addEventListener('input', atualizarUIQuitarMoeda);
+
   document.getElementById('form-quitar')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const de = document.getElementById('quitar-de')?.value;
     const para = document.getElementById('quitar-para')?.value;
+    const moeda = document.getElementById('quitar-moeda')?.value || 'BRL';
     const valor = parseFloat(document.getElementById('quitar-valor')?.value) || 0;
     const obs = document.getElementById('quitar-obs')?.value?.trim() || '';
 
@@ -4108,16 +4232,29 @@ function initListeners() {
       return;
     }
 
+    const taxaCambio = moeda === 'BRL' ? 1 : getTaxaQuitar();
+    if (moeda !== 'BRL' && !(taxaCambio > 0)) {
+      alert(t('invalidRateAlert'));
+      return;
+    }
+
+    const valorBRL = valor * taxaCambio;
     const grupo = getGrupoAtivo();
+
+    if (moeda !== 'BRL') {
+      grupo.taxasCambio = grupo.taxasCambio || {};
+      grupo.taxasCambio[moeda] = taxaCambio;
+    }
+
     grupo.gastos.push({
       id: gerarId('pgt'),
       tipo: 'pagamento',
       de,
       para,
       valor,
-      moeda: 'BRL',
-      taxaCambio: 1,
-      valorBRL: valor,
+      moeda,
+      taxaCambio,
+      valorBRL,
       obs,
       data: getTodayISO(),
       descricao: obs ? t('settlementObsDesc', { obs }) : t('settlementDefaultDesc')
@@ -4246,25 +4383,27 @@ function initListeners() {
   document.getElementById('btn-instalar-app-gate')?.addEventListener('click', acionarInstalacaoApp);
   document.getElementById('btn-fechar-escolher-grupo')?.addEventListener('click', fecharModalEscolherGrupoGasto);
 
-document.getElementById('modal-escolher-grupo-gasto')?.addEventListener('click', (e) => {
-  if (e.target.id === 'modal-escolher-grupo-gasto') {
-    fecharModalEscolherGrupoGasto();
-  }
-});
+  document.getElementById('modal-escolher-grupo-gasto')?.addEventListener('click', (e) => {
+    if (e.target.id === 'modal-escolher-grupo-gasto') {
+      fecharModalEscolherGrupoGasto();
+    }
+  });
 
-document.getElementById('btn-escolher-novo-grupo-gasto')?.addEventListener('click', async () => {
-  fecharModalEscolherGrupoGasto();
-  await criarNovoGrupo();
-  const grupoCriado = getGrupoAtivo();
-  if (grupoCriado) {
-    abrirTelaDetalheGrupo(grupoCriado.id);
-    abrirFormularioDeNovoGasto();
-  }
-});
+  document.getElementById('btn-escolher-novo-grupo-gasto')?.addEventListener('click', async () => {
+    fecharModalEscolherGrupoGasto();
+    await criarNovoGrupo();
+    const grupoCriado = getGrupoAtivo();
+    if (grupoCriado) {
+      abrirTelaDetalheGrupo(grupoCriado.id);
+      abrirFormularioDeNovoGasto();
+    }
+  });
 }
+
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-novo-gasto-home')?.addEventListener('click', aoClicarNovoGastoNaHome);
 });
+
 // ==================== BOOT ====================
 state = carregarEstadoLocal();
 dataGastoSelecionada = getTodayISO();

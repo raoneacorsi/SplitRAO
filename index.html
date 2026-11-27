@@ -446,9 +446,30 @@
         </div>
 
         <div class="form-group">
-          <label for="quitar-valor" data-i18n="settleAmountLabel">Valor Pago (R$)</label>
-          <input type="number" id="quitar-valor" step="0.01" min="0.01" placeholder="0,00" required>
-        </div>
+  <label for="quitar-valor">Valor</label>
+  <div class="currency-input-group">
+    <select id="quitar-moeda" class="currency-select"></select>
+    <input type="number" id="quitar-valor" min="0.01" step="0.01" placeholder="0,00" required>
+  </div>
+</div>
+
+<div id="quitar-box-cambio" class="exchange-box hidden">
+  <div class="exchange-header">
+    <span id="quitar-cambio-label" class="exchange-title">Cotação (1 moeda em BRL)</span>
+    <button type="button" id="btn-quitar-buscar-cotacao" class="btn-text">↻ Buscar cotação</button>
+  </div>
+  <div class="exchange-row">
+    <div class="exchange-input-wrap">
+      <span>1 <strong id="quitar-cambio-moeda"></strong> = R$</span>
+      <input type="number" id="quitar-taxa-cambio" min="0.000001" step="any" placeholder="0.00">
+    </div>
+    <div class="exchange-converted">
+      <small>Equivalente em BRL</small>
+      <strong id="quitar-valor-convertido-brl">R$ 0,00</strong>
+    </div>
+  </div>
+  <small id="quitar-cambio-status" class="exchange-status"></small>
+</div>
 
         <div class="form-group" style="margin-bottom: 0;">
           <label for="quitar-obs" data-i18n="settleNoteLabel">Observação (Opcional)</label>
