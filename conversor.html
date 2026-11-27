@@ -126,6 +126,7 @@
 
   <script type="module">
     // Reutiliza o idioma salvo pelo aplicativo principal.
+    import { classificarImportacao as mapearCategoria } from './categorias-keywords.js';
     import { LANG_STORAGE_KEY, createTranslator } from './i18n.js';
     const { t, getNomeCategoriaTraduzido } = createTranslator(() => localStorage.getItem(LANG_STORAGE_KEY) || 'pt');
     document.documentElement.lang = localStorage.getItem(LANG_STORAGE_KEY) || 'pt';
@@ -142,251 +143,7 @@
         .trim();
     }
 
-    // Categorias novas: primeiro a categoria específica do CSV, depois a descrição.
-    function mapearCategoria(categoriaRaw, descricaoRaw) {
-      const limpar = texto => normalizarTexto(texto).replace(/[^a-z0-9]+/g, ' ').trim();
-      const cat = limpar(categoriaRaw);
-      const desc = limpar(descricaoRaw);
-      const regras = {
-  "Mercado": [
-    "mercado",
-    "supermercado",
-    "mantimentos",
-    "groceries",
-    "grocery",
-    "supermarket",
-    "alimentos",
-    "hortifruti",
-    "acougue",
-    "padaria",
-    "feira",
-    "carniceria",
-    "panaderia",
-    "verduleria",
-    "mercearia"
-  ],
-  "Comer fora": [
-    "comer fora",
-    "jantar fora",
-    "dining out",
-    "eating out",
-    "restaurante",
-    "restaurant",
-    "delivery",
-    "ifood",
-    "rappi",
-    "almoco",
-    "jantar",
-    "lanche",
-    "lanchonete",
-    "cafeteria",
-    "pizza",
-    "sushi",
-    "hamburguer",
-    "bar",
-    "cafe",
-    "breakfast",
-    "lunch",
-    "dinner",
-    "almuerzo",
-    "cena",
-    "comida fuera"
-  ],
-  "Entretenimento": [
-    "entretenimento",
-    "entertainment",
-    "cinema",
-    "filmes",
-    "movies",
-    "music",
-    "musica",
-    "jogos",
-    "games",
-    "show",
-    "teatro",
-    "netflix",
-    "spotify",
-    "streaming",
-    "concierto"
-  ],
-  "Transporte": [
-    "transporte",
-    "transportation",
-    "carro",
-    "car",
-    "combustivel",
-    "gasolina",
-    "gas/fuel",
-    "fuel",
-    "parking",
-    "estacionamento",
-    "pedagio",
-    "taxi",
-    "uber",
-    "99",
-    "onibus/trem",
-    "bus/train",
-    "onibus",
-    "trem",
-    "metro",
-    "plane",
-    "aviao",
-    "passagem",
-    "voo",
-    "bicycle",
-    "bicicleta",
-    "mecanico",
-    "oficina",
-    "pneu",
-    "diesel",
-    "etanol",
-    "lava jato",
-    "autobus",
-    "tren",
-    "vuelo"
-  ],
-  "Saúde": [
-    "saude",
-    "health",
-    "medical",
-    "despesas medicas",
-    "medico",
-    "farmacia",
-    "pharmacy",
-    "hospital",
-    "dentista",
-    "medicamento",
-    "consulta medica",
-    "salud"
-  ],
-  "Casa": [
-    "casa",
-    "household",
-    "home",
-    "rent",
-    "aluguel",
-    "condominio",
-    "utilities",
-    "maintenance",
-    "manutencao",
-    "limpeza",
-    "cleaning",
-    "eletricidade",
-    "electricity",
-    "luz",
-    "agua",
-    "water",
-    "internet",
-    "telefone",
-    "tv/telefone/internet",
-    "furniture",
-    "moveis",
-    "electronics",
-    "eletronicos",
-    "faxina",
-    "diarista",
-    "gas",
-    "alquiler",
-    "hogar"
-  ],
-  "Educação": [
-    "educacao",
-    "education",
-    "escola",
-    "school",
-    "faculdade",
-    "universidade",
-    "curso",
-    "tuition",
-    "livro didatico",
-    "educacion"
-  ],
-  "Presentes": [
-    "presentes",
-    "presente",
-    "gifts",
-    "gift",
-    "regalo",
-    "regalos"
-  ],
-  "Lazer": [
-    "lazer",
-    "leisure",
-    "esportes",
-    "sports",
-    "passeio",
-    "trilha",
-    "camping",
-    "parque",
-    "turismo",
-    "viagem",
-    "travel",
-    "hotel",
-    "hospedagem",
-    "airbnb",
-    "pousada",
-    "hostel",
-    "recreation",
-    "deportes",
-    "viaje",
-    "ocio"
-  ],
-  "Vestuário": [
-    "vestuario",
-    "clothing",
-    "roupa",
-    "roupas",
-    "sapato",
-    "tenis",
-    "calcado",
-    "shoes",
-    "ropa",
-    "zapatos"
-  ],
-  "Seguros / Impostos": [
-    "seguros / impostos",
-    "seguro/impostos",
-    "seguro",
-    "seguros",
-    "insurance",
-    "imposto",
-    "impostos",
-    "tax",
-    "taxes",
-    "ipva",
-    "iptu",
-    "seguro de vida",
-    "impuestos"
-  ],
-  "Animais de estimação": [
-    "animais de estimacao",
-    "pets",
-    "pet",
-    "pet shop",
-    "petshop",
-    "veterinario",
-    "veterinary",
-    "racao",
-    "mascotas",
-    "mascota",
-    "veterinaria"
-  ]
-};
-      const termos = Object.entries(regras).flatMap(([destino, lista]) => lista.map(t => [destino, limpar(t)]));
-      const exato = termos.find(([, termo]) => cat === termo);
-      if (exato) return exato[0];
-      // Frases completas evitam, por exemplo, reconhecer "bar" em "barato".
-      const candidatos = termos.filter(([, termo]) => (` ${desc} `).includes(` ${termo} `));
-      candidatos.sort((a,b) => b[1].length - a[1].length);
-      return candidatos[0]?.[0] || 'Geral';
-    }
-
-    const nomesCategorias = {"pt": ["Mercado", "Comer fora", "Entretenimento", "Transporte", "Saúde", "Casa", "Educação", "Presentes", "Lazer", "Vestuário", "Seguros / Impostos", "Animais de estimação", "Geral"], "en": ["Groceries", "Dining out", "Entertainment", "Transport", "Health", "Home", "Education", "Gifts", "Leisure", "Clothing", "Insurance / Taxes", "Pets", "General"], "es": ["Supermercado", "Comer fuera", "Entretenimiento", "Transporte", "Salud", "Casa", "Educación", "Regalos", "Ocio", "Ropa", "Seguros / Impuestos", "Mascotas", "General"]};
-    function nomeCategoriaConversor(cat) {
-      const indice = nomesCategorias.pt.indexOf(cat);
-      const idioma = localStorage.getItem(LANG_STORAGE_KEY) || "pt";
-      return (nomesCategorias[idioma] || nomesCategorias.pt)[indice] || getNomeCategoriaTraduzido(cat);
-    }
+    const nomeCategoriaConversor = getNomeCategoriaTraduzido;
 
     const dropzone = document.getElementById('dropzone');
     const csvInput = document.getElementById('csv-input');
@@ -463,7 +220,7 @@
           continue;
         }
 
-        const pagador = quemRecebe[0] || pessoas[pessoas.length - 1];
+        const pagador = quemRecebe.length === 0 && quemDeve.length === 0 ? null : (quemRecebe[0] || pessoas[pessoas.length - 1]);
         const divisao = {};
         const participantes = [];
 
@@ -473,7 +230,7 @@
         });
 
         const parteDoPagador = Math.round((valor - (saldos[pagador] || 0)) * 100) / 100;
-        if (parteDoPagador > 0.005) {
+        if (pagador && parteDoPagador > 0.005) {
           divisao[pagador] = parteDoPagador;
           participantes.unshift(pagador);
         }
@@ -564,7 +321,8 @@
           moeda: 'BRL',
           taxaCambio: 1,
           valorBRL: item.valor,
-          pagador: mapaApelidos[item.pagadorOrig] || item.pagadorOrig,
+          pagador: item.pagadorOrig ? (mapaApelidos[item.pagadorOrig] || item.pagadorOrig) : null,
+          pagadorNaoIdentificado: item.pagadorOrig === null,
           modoDivisao: item.modoDivisao || 'exato',
           participantes: (item.participantesOrig || []).map(p => mapaApelidos[p] || p),
           divisao: novaDivisao

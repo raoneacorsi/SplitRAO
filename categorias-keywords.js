@@ -835,3 +835,19 @@ const NOVAS = {
   ]
 };
 export const REGRAS_AUTO_CATEGORIA = [...Object.entries(NOVAS).map(([categoria,palavras]) => ({categoria,palavras})), ...REGRAS_ANTIGAS.filter(r => ["Casa","Carro","Transporte","Entretenimento"].includes(r.categoria)).map(r => ({...r,categoria:r.categoria === "Carro" ? "Transporte" : r.categoria}))];
+
+// Classificação compartilhada pelo cadastro e pelas importações.
+const limparCategoria = v => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+const termosCategoria = REGRAS_AUTO_CATEGORIA.flatMap(r => [r.categoria,...r.palavras].map(p => [r.categoria,limparCategoria(p)])).filter(([,p])=>p);
+export function detectarCategoriaAutomatica(descricao) {
+ const frase = ' '+limparCategoria(descricao)+' ';
+ let melhor = null, tamanho = 0;
+ for(const [cat,termo] of termosCategoria) if(termo.length>tamanho && frase.includes(' '+termo+' ')){melhor=cat;tamanho=termo.length;}
+ return melhor;
+}
+export function mapearCategoriaSplitwise(categoria) {
+ const termo=limparCategoria(categoria);
+ if(['','general','geral','other','outros','uncategorized','sem categoria'].includes(termo)) return null;
+ return termosCategoria.find(([,p])=>p===termo)?.[0] || null;
+}
+export function classificarImportacao(categoria,descricao){return mapearCategoriaSplitwise(categoria)||detectarCategoriaAutomatica(descricao)||'Geral';}

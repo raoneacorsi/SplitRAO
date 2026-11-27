@@ -4,7 +4,8 @@ import {
   doc,
   getDoc,
   setDoc,
-  onSnapshot
+  onSnapshot,
+  runTransaction, FieldPath, deleteField
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   getAuth,
@@ -21,9 +22,9 @@ import {
   browserSessionPersistence
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { LANG_STORAGE_KEY, createTranslator } from "./i18n.js";
-import { REGRAS_AUTO_CATEGORIA } from "./categorias-keywords.js";
+import { detectarCategoriaAutomatica, mapearCategoriaSplitwise } from "./categorias-keywords.js";
 
-// ==================== CONFIGURAÇÃO FIREBASE ====================
+// ===== 01. CONFIGURAÇÃO FIREBASE =====
 const firebaseConfig = {
   apiKey: "AIzaSyDheZEifsJ7WDQk9-l6wosXZuewyjyy3Sg",
   authDomain: "splitrao.firebaseapp.com",
@@ -39,7 +40,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
 
-// ==================== CONSTANTES E ESTADO ====================
+// ===== 02. CONSTANTES E ESTADO =====
 const STORAGE_KEY_LEGACY = 'raodev_split_v3_multi';
 const USER_NAME_STORAGE_KEY = 'raodev_split_user_name_v1';
 const ME_BY_GROUP_STORAGE_KEY = 'raodev_split_me_by_group_v1';
@@ -125,22 +126,7 @@ function normalizarTexto(str) {
     .trim();
 }
 
-function detectarCategoriaAutomatica(descricao) {
-  const texto = normalizarTexto(descricao);
-  if (!texto || texto.length < 2) return null;
 
-  const frase = ' ' + texto.replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
-  let melhor = null, tamanho = 0;
-  for (const regra of REGRAS_AUTO_CATEGORIA) {
-    for (const kw of regra.palavras) {
-      const termo = normalizarTexto(kw).replace(/[^a-z0-9]+/g, ' ').trim();
-      if (termo && termo.length > tamanho && frase.includes(' ' + termo + ' ')) {
-        melhor = regra.categoria; tamanho = termo.length;
-      }
-    }
-  }
-  return melhor;
-}
 
 let currentLang = localStorage.getItem(LANG_STORAGE_KEY) || 'pt';
 if (!['pt', 'es', 'en'].includes(currentLang)) currentLang = 'pt';
@@ -179,7 +165,7 @@ let menuHome3DotsAberto = false;
 let dataGastoSelecionada = '';
 let undoPendente = null;
 
-// ==================== NAVEGAÇÃO ENTRE TELAS ====================
+// ===== 03. NAVEGAÇÃO ENTRE TELAS =====
 // Histórico real do navegador: uma entrada para a lista e outra para o grupo.
 const NAV_KEY = 'splitraoTela';
 function estadoNavegacao(tela, grupoId = null) {
@@ -316,7 +302,7 @@ async function aoClicarNovoGastoNaHome() {
   modalEl.classList.remove('hidden');
 }
 
-// ==================== UTILITÁRIOS DE IDENTIDADE ("EU") ====================
+// ===== 04. UTILITÁRIOS DE IDENTIDADE ("EU") =====
 function salvarNomeUsuarioLocal(nome) {
   const limpo = String(nome || '').trim();
   currentUserName = limpo;
@@ -412,7 +398,7 @@ async function persistirNomeNoPerfil(nome) {
   }
 }
 
-// ==================== UTILITÁRIOS GERAIS ====================
+// ===== 05. UTILITÁRIOS GERAIS =====
 function getTodayISO() {
   const now = new Date();
   const y = now.getFullYear();
@@ -479,6 +465,30 @@ function gerarId(prefixo) {
   return `${prefixo}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 }
 
+// Gera códigos uniformes de 8 caracteres, sem símbolos ambíguos.
+function gerarCodigoGrupo() {
+  const alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return Array.from(crypto.getRandomValues(new Uint8Array(8)), n => alfabeto[n & 31]).join('');
+}
+
+// Reserva o documento atomicamente; nunca substitui um grupo existente.
+async function reservarNovoGrupo(grupo, uid = currentUser?.uid) {
+  for (let tentativa = 0; tentativa < 20; tentativa++) {
+    const id = gerarCodigoGrupo();
+    if (state.grupos[id]) continue;
+    const novo = { ...grupo, id };
+    if (!uid) throw new Error('Authentication required');
+    const reservado = await runTransaction(db, async tx => {
+      const ref = getGroupDocRef(id);
+      if ((await tx.get(ref)).exists()) return false;
+      tx.set(ref, { ...novo, members: { [uid]: true }, updatedAt: Date.now(), updatedBy: uid });
+      return true;
+    });
+    if (reservado) return novo;
+  }
+  throw new Error('Group code unavailable');
+}
+
 function normalizarDataISOOrdenacao(dataStr) {
   if (!dataStr || typeof dataStr !== 'string') return '0000-00-00';
   const limpo = dataStr.trim();
@@ -540,7 +550,7 @@ function comprimirImagemArquivo(file, maxSize = 260, quality = 0.78) {
   });
 }
 
-// ==================== INICIALIZAÇÃO DE ESTADO ====================
+// ===== 06. INICIALIZAÇÃO DE ESTADO =====
 function criarGrupoPadrao(id = DEFAULT_GROUP_ID, nome = 'Grupo Principal') {
   return {
     id,
@@ -662,7 +672,7 @@ function normalizarEstruturaGrupo(id, raw) {
       };
     }
 
-    const pagador = resolverNomePessoa(item.pagador ?? item.quemPagou ?? item.de);
+    const pagador = item.pagadorNaoIdentificado ? null : resolverNomePessoa(item.pagador ?? item.quemPagou ?? item.de);
     const moeda = item.moeda || 'BRL';
     const taxaCambio = parseNumeroFlexivel(item.taxaCambio) > 0 ? parseNumeroFlexivel(item.taxaCambio) : 1;
     const valBruto = parseNumeroFlexivel(item.valor);
@@ -688,7 +698,7 @@ function normalizarEstruturaGrupo(id, raw) {
       taxaCambio,
       valor: valBruto > 0 ? valBruto : valorBRL,
       valorBRL,
-      divisao: divisaoObj
+      divisao: item.pagadorNaoIdentificado ? {} : divisaoObj
     };
   }).filter(Boolean);
 
@@ -741,7 +751,7 @@ function salvarEstadoLocal() {
   }
 }
 
-// ==================== CAMADA FIREBASE / NUVEM ====================
+// ===== 07. CAMADA FIREBASE / NUVEM =====
 function getUserProfileRef(uid) {
   return doc(db, 'users', uid);
 }
@@ -762,41 +772,36 @@ async function garantirPerfilUsuarioNaNuvem(user) {
   }
 
   if (!snap.exists()) {
-    const inicial = criarGrupoPadrao(DEFAULT_GROUP_ID, 'Grupo Principal');
+    let inicial = criarGrupoPadrao(DEFAULT_GROUP_ID, 'Grupo Principal');
     if (nomeEfetivo) {
       inicial.pessoas.push(nomeEfetivo);
       inicial.meuParticipante = nomeEfetivo;
     }
-    await setDoc(getGroupDocRef(DEFAULT_GROUP_ID), {
-      ...inicial,
-      ownerUid: user.uid,
-      members: { [user.uid]: true },
-      updatedAt: Date.now()
-    }, { merge: true });
+    inicial = await reservarNovoGrupo({ ...inicial, ownerUid: user.uid }, user.uid);
 
     await setDoc(userRef, {
       email: user.email || '',
       displayName: nomeEfetivo,
-      groupIds: [DEFAULT_GROUP_ID],
-      activeGroupId: DEFAULT_GROUP_ID,
+      groupIds: [inicial.id],
+      activeGroupId: inicial.id,
       updatedAt: Date.now()
     });
 
     return {
       email: user.email || '',
       displayName: nomeEfetivo,
-      groupIds: [DEFAULT_GROUP_ID],
-      activeGroupId: DEFAULT_GROUP_ID
+      groupIds: [inicial.id],
+      activeGroupId: inicial.id
     };
   }
 
   const data = snap.data();
-  const groupIds = Array.isArray(data.groupIds) && data.groupIds.length > 0
+  const groupIds = Array.isArray(data.groupIds)
     ? data.groupIds
-    : [DEFAULT_GROUP_ID];
+    : [];
   const activeGroupId = data.activeGroupId && groupIds.includes(data.activeGroupId)
     ? data.activeGroupId
-    : groupIds[0];
+    : (groupIds[0] || null);
 
   const nomeNuvem = data.displayName || user.displayName || nomeSalvoLocal || '';
   if (nomeNuvem) {
@@ -853,6 +858,35 @@ async function desvincularGrupoDoUsuario(uid, groupId) {
   }, { merge: true });
 }
 
+// Compatibilidade com vínculos antigos gravados como campos literais.
+function membrosReais(data) {
+  const membros = Object.create(null);
+  for (const [uid, ativo] of Object.entries(data.members || {})) if (ativo === true) membros[uid] = true;
+  for (const [campo, ativo] of Object.entries(data)) {
+    if (campo.startsWith('members.') && ativo === true) membros[campo.slice(8)] = true;
+  }
+  return membros;
+}
+
+function atualizarMembros(tx, ref, data, membros) {
+  tx.update(ref, { members: { ...membros } });
+  for (const campo of Object.keys(data)) {
+    if (campo.startsWith('members.')) tx.update(ref, new FieldPath(campo), deleteField());
+  }
+}
+
+async function ingressarGrupo(id, uid) {
+  await runTransaction(db, async tx => {
+    const ref = getGroupDocRef(id);
+    const snap = await tx.get(ref);
+    if (!snap.exists() || snap.data().deleted) throw new Error('Group unavailable');
+    const data = snap.data();
+    const membros = membrosReais(data);
+    membros[uid] = true;
+    atualizarMembros(tx, ref, data, membros);
+  });
+}
+
 async function salvarGrupoNaNuvem(grupo) {
   salvarEstadoLocal();
   if (!grupo || !grupo.id) return;
@@ -877,11 +911,14 @@ async function salvarGrupoNaNuvem(grupo) {
       meuParticipante: grupo.meuParticipante || null,
       gastos: grupo.gastos || [],
       taxasCambio: grupo.taxasCambio || {},
-      [`members.${currentUser.uid}`]: true,
       updatedAt: Date.now(),
       updatedBy: currentUser.uid
     };
-    await setDoc(groupRef, payload, { merge: true });
+    await runTransaction(db, async tx => {
+      const snap = await tx.get(groupRef);
+      if (!snap.exists() || snap.data().deleted || !membrosReais(snap.data())[currentUser.uid]) throw new Error('Group unavailable');
+      tx.update(groupRef, payload);
+    });
     cloudGroupsCache[grupo.id] = normalizarEstruturaGrupo(grupo.id, payload);
     const agora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     setSaveStatus('statusSyncedAt', { time: agora });
@@ -966,7 +1003,7 @@ function renomearNomeEmGrupo(grupo, nomeAntigo, nomeNovo) {
         };
       }
 
-      const novoPagador = substituirNome(g.pagador);
+      const novoPagador = g.pagadorNaoIdentificado ? null : substituirNome(g.pagador);
       const novosParticipantes = Array.isArray(g.participantes)
         ? g.participantes.map(p => substituirNome(p))
         : g.participantes;
@@ -1064,12 +1101,13 @@ async function carregarGruposDoUsuario(userData) {
   const groupIds = Array.isArray(userData?.groupIds) ? userData.groupIds : [];
 
   if (groupIds.length === 0) {
-    const padrao = criarGrupoPadrao(DEFAULT_GROUP_ID, 'Grupo Principal');
+    let padrao = criarGrupoPadrao('', 'Grupo Principal');
     const nomeEfetivo = getNomeUsuarioEfetivo();
     if (nomeEfetivo) {
       padrao.pessoas.push(nomeEfetivo);
       padrao.meuParticipante = nomeEfetivo;
     }
+    padrao = await reservarNovoGrupo(padrao);
     state.grupos = { [padrao.id]: padrao };
     state.grupoAtivoId = padrao.id;
     await salvarGrupoNaNuvem(padrao);
@@ -1087,8 +1125,6 @@ async function carregarGruposDoUsuario(userData) {
         const norm = normalizarEstruturaGrupo(gid, snap.data());
         novosGrupos[gid] = norm;
         cloudGroupsCache[gid] = norm;
-      } else if (state.grupos[gid]) {
-        novosGrupos[gid] = normalizarEstruturaGrupo(gid, state.grupos[gid]);
       }
     } catch (e) {
       console.warn(`Erro ao carregar grupo ${gid}:`, e);
@@ -1099,14 +1135,15 @@ async function carregarGruposDoUsuario(userData) {
   }
 
   if (Object.keys(novosGrupos).length === 0) {
-    const padrao = criarGrupoPadrao(DEFAULT_GROUP_ID, 'Grupo Principal');
+    let padrao = criarGrupoPadrao('', 'Grupo Principal');
     const nomeEfetivo = getNomeUsuarioEfetivo();
     if (nomeEfetivo) {
       padrao.pessoas.push(nomeEfetivo);
       padrao.meuParticipante = nomeEfetivo;
     }
+    padrao = await reservarNovoGrupo(padrao);
     novosGrupos[padrao.id] = padrao;
-    await salvarGrupoNaNuvem(padrao);
+    await vincularGrupoAoUsuario(currentUser.uid, padrao.id, true);
   }
 
   state.grupos = novosGrupos;
@@ -1135,10 +1172,7 @@ async function processarConviteDaURL() {
       state.grupos[cleanId] = norm;
       cloudGroupsCache[cleanId] = norm;
       state.grupoAtivoId = cleanId;
-      await setDoc(getGroupDocRef(cleanId), {
-        [`members.${currentUser.uid}`]: true,
-        updatedAt: Date.now()
-      }, { merge: true });
+      await ingressarGrupo(cleanId, currentUser.uid);
       await vincularGrupoAoUsuario(currentUser.uid, cleanId, true);
       salvarEstadoLocal();
       assinarGrupoAtivo(cleanId);
@@ -1201,7 +1235,7 @@ function assinarPerfilUsuario(uid) {
   });
 }
 
-// ==================== AUTENTICAÇÃO ====================
+// ===== 08. AUTENTICAÇÃO =====
 function mostrarFeedbackAuth(msg, tipo = 'err') {
   const box = document.getElementById('auth-feedback');
   if (!box) return;
@@ -1392,7 +1426,7 @@ function initAuthListeners() {
   });
 }
 
-// ==================== INTERNACIONALIZAÇÃO (I18N) ====================
+// ===== 09. INTERNACIONALIZAÇÃO (I18N) =====
 function atualizarBandeiraAtualUI() {
   document.querySelectorAll('.lang-dropdown').forEach(dropdown => {
     const currentFlagEl = dropdown.querySelector('.lang-current-flag');
@@ -1435,6 +1469,7 @@ function aplicarIdiomaNaInterface() {
     el.setAttribute('aria-label', t(el.dataset.i18nAriaLabel));
   });
 
+  atualizarTituloQuitar();
   atualizarBandeiraAtualUI();
 
   setModoAuth(authMode);
@@ -1488,7 +1523,7 @@ function initLanguageSwitcher() {
   document.addEventListener('click', fecharMenusIdioma);
 }
 
-// ==================== MENUS DE 3 TRACINHOS ====================
+// ===== 10. MENUS DE 3 TRACINHOS =====
 function setMenu3DotsAberto(aberto) {
   menu3DotsAberto = Boolean(aberto);
   if (menu3DotsAberto) setMenu3DotsHomeAberto(false);
@@ -1507,7 +1542,7 @@ function setMenu3DotsHomeAberto(aberto) {
   drop?.classList.toggle('hidden', !menuHome3DotsAberto);
 }
 
-// ==================== ACESSO E GERENCIAMENTO DE GRUPOS ====================
+// ===== 11. ACESSO E GERENCIAMENTO DE GRUPOS =====
 function getGrupoAtivo() {
   if (!state.grupos[state.grupoAtivoId]) {
     const keys = Object.keys(state.grupos);
@@ -1768,15 +1803,15 @@ async function trocarGrupoAtivo(novoId, { abrirDetalhe = false } = {}) {
 }
 
 // Solicita um nome usando o mesmo padrão visual dos demais modais.
-function solicitarNomeNovoGrupo({ perfil = false } = {}) {
+function solicitarNomeNovoGrupo({ perfil = false, renomear = false, nomeAtual = "" } = {}) {
   const modal = document.getElementById('modal-novo-grupo');
   const form = document.getElementById('form-novo-grupo');
   const input = document.getElementById('novo-grupo-nome');
   const focoAnterior = document.activeElement;
-  document.getElementById('novo-grupo-titulo').textContent = t(perfil ? 'nameLabel' : 'newGroupFull');
-  document.getElementById('novo-grupo-label').textContent = t(perfil ? 'askMyNamePrompt' : 'newGroupPrompt');
-  document.getElementById('btn-confirmar-novo-grupo').textContent = t(perfil ? 'confirmNameBtn' : 'createGroupBtn');
-  input.value = '';
+  document.getElementById('novo-grupo-titulo').textContent = t(renomear ? 'renameGroupTitle' : perfil ? 'nameLabel' : 'newGroupFull');
+  document.getElementById('novo-grupo-label').textContent = t(renomear ? 'renameGroupPrompt' : perfil ? 'askMyNamePrompt' : 'newGroupPrompt');
+  document.getElementById('btn-confirmar-novo-grupo').textContent = t(renomear ? 'saveGroupName' : perfil ? 'confirmNameBtn' : 'createGroupBtn');
+  input.value = nomeAtual;
   modal.classList.remove('hidden');
   input.focus();
   return new Promise(resolve => {
@@ -1807,8 +1842,7 @@ function solicitarNomeNovoGrupo({ perfil = false } = {}) {
 async function criarNovoGrupo() {
   const nome = await solicitarNomeNovoGrupo();
   if (!nome || !nome.trim()) return;
-  const id = gerarId('grp');
-  const novoGrupo = criarGrupoPadrao(id, nome.trim());
+  let novoGrupo = criarGrupoPadrao('', nome.trim());
   novoGrupo.order = getGruposOrdenados().length;
 
   let nomeUsuario = getNomeUsuarioEfetivo();
@@ -1822,9 +1856,18 @@ async function criarNovoGrupo() {
 
   if (nomeUsuario) {
     novoGrupo.pessoas.push(nomeUsuario);
-    setMeParticipantName(novoGrupo, nomeUsuario);
+    novoGrupo.meuParticipante = nomeUsuario;
   }
 
+  try {
+    novoGrupo = await reservarNovoGrupo(novoGrupo);
+  } catch (err) {
+    console.error('Erro ao reservar grupo:', err);
+    alert(t('groupCodeError'));
+    return;
+  }
+  const id = novoGrupo.id;
+  if (nomeUsuario) setMeParticipantName(novoGrupo, nomeUsuario);
   state.grupos[id] = novoGrupo;
   state.grupoAtivoId = id;
   filtroCategoriaAtual = 'todas';
@@ -1840,7 +1883,8 @@ async function criarNovoGrupo() {
 
 async function renomearGrupoAtual() {
   const grupo = getGrupoAtivo();
-  const novoNome = prompt(t('renameGroupPrompt'), grupo.nome);
+  setMenu3DotsAberto(false);
+  const novoNome = await solicitarNomeNovoGrupo({ renomear: true, nomeAtual: grupo.nome });
   if (!novoNome || !novoNome.trim()) return;
   grupo.nome = novoNome.trim();
   await salvarGrupoNaNuvem(grupo);
@@ -1848,14 +1892,15 @@ async function renomearGrupoAtual() {
 }
 
 // Exibe as opções de saída e mantém a confirmação explícita para exclusão global.
-function solicitarAcaoSaidaGrupo(grupo, confirmarExclusao = false) {
+function solicitarAcaoSaidaGrupo(grupo, confirmarExclusao = false, podeExcluir = false) {
   const modal = document.getElementById('modal-sair-grupo');
   const opcoes = document.getElementById('sair-grupo-opcoes');
   const confirmar = document.getElementById('btn-confirmar-excluir-todos');
   const cancelar = document.getElementById('btn-cancelar-sair-grupo');
   const focoAnterior = document.activeElement;
   document.getElementById('sair-grupo-titulo').textContent = t(confirmarExclusao ? 'deleteEveryoneBtn' : 'leaveDeleteBtn');
-  document.getElementById('sair-grupo-texto').textContent = t(confirmarExclusao ? 'deleteGroupConfirm' : 'leaveGroupModalText', { name: grupo.nome });
+  document.getElementById('sair-grupo-texto').textContent = t(confirmarExclusao ? 'deleteGroupConfirm' : (podeExcluir ? 'leaveGroupModalText' : 'leaveOnlyText'), { name: grupo.nome });
+  document.getElementById('btn-excluir-todos').classList.toggle('hidden', !podeExcluir);
   opcoes.classList.toggle('hidden', confirmarExclusao);
   confirmar.classList.toggle('hidden', !confirmarExclusao);
   modal.classList.remove('hidden');
@@ -1872,7 +1917,7 @@ function solicitarAcaoSaidaGrupo(grupo, confirmarExclusao = false) {
       const id = e.target.id;
       if (e.target === modal || ['btn-fechar-sair-grupo', 'btn-cancelar-sair-grupo'].includes(id)) fechar(null);
       else if (!confirmarExclusao && id === 'btn-apenas-sair') fechar('1');
-      else if (!confirmarExclusao && id === 'btn-excluir-todos') fechar('2');
+      else if (!confirmarExclusao && podeExcluir && id === 'btn-excluir-todos') fechar('2');
       else if (confirmarExclusao && id === 'btn-confirmar-excluir-todos') fechar(true);
     };
     const teclado = e => {
@@ -1885,68 +1930,60 @@ function solicitarAcaoSaidaGrupo(grupo, confirmarExclusao = false) {
 
 async function excluirOuSairDoGrupo() {
   const grupo = getGrupoAtivo();
-  const op = await solicitarAcaoSaidaGrupo(grupo);
-  if (!op) return;
-
-  if (op === '1') {
-    if (currentUser) {
-      await desvincularGrupoDoUsuario(currentUser.uid, grupo.id);
-    }
-    delete state.grupos[grupo.id];
-    const restantes = Object.keys(state.grupos);
-    if (restantes.length === 0) {
-      const padrao = criarGrupoPadrao(gerarId('grp'), 'Grupo Principal');
-      const nomeEfetivo = getNomeUsuarioEfetivo();
-      if (nomeEfetivo) {
-        padrao.pessoas.push(nomeEfetivo);
-        padrao.meuParticipante = nomeEfetivo;
+  const uid = currentUser?.uid;
+  if (!uid) return;
+  const ref = getGroupDocRef(grupo.id);
+  try {
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error('Group unavailable');
+    const membros = membrosReais(snap.data());
+    const podeExcluir = membros[uid] === true && Object.keys(membros).length === 1;
+    const op = await solicitarAcaoSaidaGrupo(grupo, false, podeExcluir);
+    if (!op) return;
+    if (op === '2' && (!podeExcluir || !await solicitarAcaoSaidaGrupo(grupo, true, true))) return;
+    isSavingCloud = true;
+    // Revalida os vínculos e atualiza o perfil na mesma transação.
+    await runTransaction(db, async tx => {
+      const atual = await tx.get(ref);
+      const perfilRef = getUserProfileRef(uid);
+      const perfil = await tx.get(perfilRef);
+      if (!atual.exists() || !perfil.exists()) throw new Error('Group unavailable');
+      const data = atual.data();
+      const ativos = membrosReais(data);
+      if (!ativos[uid]) throw new Error('Membership unavailable');
+      if (op === '2') {
+        if (Object.keys(ativos).length !== 1) throw new Error('Other members exist');
+        tx.delete(ref);
+      } else {
+        delete ativos[uid];
+        atualizarMembros(tx, ref, data, ativos);
       }
+      const ids = (perfil.data().groupIds || []).filter(id => id !== grupo.id);
+      tx.update(perfilRef, { groupIds: ids, activeGroupId: ids[0] || null, updatedAt: Date.now() });
+    });
+    unsubscribeGroupDoc?.();
+    unsubscribeGroupDoc = null;
+    delete state.grupos[grupo.id];
+    delete cloudGroupsCache[grupo.id];
+    delete meByGroupCache[grupo.id];
+    const restantes = Object.keys(state.grupos);
+    if (!restantes.length) {
+      // Mantém o comportamento anterior de criar um grupo inicial vazio.
+      let padrao = criarGrupoPadrao('', 'Grupo Principal');
+      const nome = getNomeUsuarioEfetivo();
+      if (nome) { padrao.pessoas.push(nome); padrao.meuParticipante = nome; }
+      padrao = await reservarNovoGrupo(padrao);
       state.grupos[padrao.id] = padrao;
-      state.grupoAtivoId = padrao.id;
-      await salvarGrupoNaNuvem(padrao);
-      if (currentUser) await vincularGrupoAoUsuario(currentUser.uid, padrao.id, true);
-    } else {
-      state.grupoAtivoId = restantes[0];
-      if (currentUser) await vincularGrupoAoUsuario(currentUser.uid, state.grupoAtivoId, true);
+      await vincularGrupoAoUsuario(uid, padrao.id, true);
     }
+    state.grupoAtivoId = Object.keys(state.grupos)[0];
     salvarEstadoLocal();
     assinarGrupoAtivo(state.grupoAtivoId);
     abrirTelaListaGrupos();
-  } else if (op === '2') {
-    if (!await solicitarAcaoSaidaGrupo(grupo, true)) return;
-    if (currentUser) {
-      try {
-        await setDoc(getGroupDocRef(grupo.id), {
-          deleted: true,
-          deletedAt: Date.now(),
-          updatedAt: Date.now()
-        }, { merge: true });
-        await desvincularGrupoDoUsuario(currentUser.uid, grupo.id);
-      } catch (e) {
-        console.warn('Erro ao marcar grupo excluído:', e);
-      }
-    }
-    delete state.grupos[grupo.id];
-    const restantes = Object.keys(state.grupos);
-    if (restantes.length === 0) {
-      const padrao = criarGrupoPadrao(gerarId('grp'), 'Grupo Principal');
-      const nomeEfetivo = getNomeUsuarioEfetivo();
-      if (nomeEfetivo) {
-        padrao.pessoas.push(nomeEfetivo);
-        padrao.meuParticipante = nomeEfetivo;
-      }
-      state.grupos[padrao.id] = padrao;
-      state.grupoAtivoId = padrao.id;
-      await salvarGrupoNaNuvem(padrao);
-      if (currentUser) await vincularGrupoAoUsuario(currentUser.uid, padrao.id, true);
-    } else {
-      state.grupoAtivoId = restantes[0];
-      if (currentUser) await vincularGrupoAoUsuario(currentUser.uid, state.grupoAtivoId, true);
-    }
-    salvarEstadoLocal();
-    assinarGrupoAtivo(state.grupoAtivoId);
-    abrirTelaListaGrupos();
-  }
+  } catch (e) {
+    console.error('Erro ao sair/excluir grupo:', e);
+    alert(t('leaveDeleteError'));
+  } finally { isSavingCloud = false; }
 }
 
 // Abre o convite sem alertas do navegador; mantém o link original do grupo.
@@ -2011,6 +2048,7 @@ async function entrarPorCodigoOuLink() {
     }
   } catch {}
   codigo = codigo.trim();
+  if (/^[a-hj-np-z2-9]{8}$/i.test(codigo)) codigo = codigo.toUpperCase();
   if (!codigo) return;
 
   try {
@@ -2024,10 +2062,7 @@ async function entrarPorCodigoOuLink() {
     cloudGroupsCache[codigo] = norm;
     state.grupoAtivoId = codigo;
     if (currentUser) {
-      await setDoc(getGroupDocRef(codigo), {
-        [`members.${currentUser.uid}`]: true,
-        updatedAt: Date.now()
-      }, { merge: true });
+      await ingressarGrupo(codigo, currentUser.uid);
       await vincularGrupoAoUsuario(currentUser.uid, codigo, true);
     }
     salvarEstadoLocal();
@@ -2039,7 +2074,7 @@ async function entrarPorCodigoOuLink() {
   }
 }
 
-// ==================== PARTICIPANTES E SEM APP ====================
+// ===== 12. PARTICIPANTES E SEM APP =====
 async function adicionarParticipante(nomeRaw, { marcarComoEu = false, semApp = false } = {}) {
   const nome = String(nomeRaw || '').trim();
   if (!nome) return false;
@@ -2144,7 +2179,7 @@ function renderListaPessoas() {
   });
 }
 
-// ==================== CATEGORIAS, DATA E MOEDA ====================
+// ===== 13. CATEGORIAS, DATA E MOEDA =====
 function fecharMenuCategoria() {
   document.getElementById('category-selector')?.classList.add('hidden');
   document.getElementById('btn-categoria')?.setAttribute('aria-expanded', 'false');
@@ -2256,7 +2291,7 @@ async function buscarCotacaoMoeda(moeda) {
   }
 }
 
-// ==================== FORMULÁRIO DE GASTOS E DIVISÃO ====================
+// ===== 14. FORMULÁRIO DE GASTOS E DIVISÃO =====
 function setFormGastoVisivel(visivel) {
   formGastoAberto = Boolean(visivel);
   const modalGasto = document.getElementById('modal-form-gasto');
@@ -2274,6 +2309,8 @@ function renderPagadorSelect() {
   if (!select) return;
 
   const valorAnterior = select.value;
+  const editId = document.getElementById('edit-gasto-id')?.value;
+  const desconhecido = grupo.gastos.some(g => g.id === editId && g.pagadorNaoIdentificado);
   const meName = getMeParticipantName(grupo);
   select.innerHTML = '';
 
@@ -2292,6 +2329,11 @@ function renderPagadorSelect() {
     select.appendChild(opt);
   });
 
+  if (desconhecido) {
+    const opt = new Option(t('unknownPayer'), '__splitrao_unknown__');
+    select.prepend(opt);
+    if (valorAnterior === '__splitrao_unknown__') { select.value = valorAnterior; return; }
+  }
   if (valorAnterior && grupo.pessoas.includes(valorAnterior)) {
     select.value = valorAnterior;
   } else if (meName && grupo.pessoas.includes(meName)) {
@@ -2312,6 +2354,10 @@ function renderAreaDivisao(valoresPredefinidos = null) {
   const area = document.getElementById('area-divisao-dinamica');
   const feedback = document.getElementById('split-feedback');
   if (!area) return;
+  const editId = document.getElementById('edit-gasto-id')?.value;
+  const pessoalImportado = grupo.gastos.some(g => g.id === editId && g.pagadorNaoIdentificado);
+  for (const id of ['split-mode-tabs','btn-todos']) document.getElementById(id)?.classList.toggle('hidden', pessoalImportado);
+  if (pessoalImportado) { area.textContent = t('noSplit'); feedback?.classList.add('hidden'); return; }
 
   if (grupo.pessoas.length === 0) {
     area.innerHTML = `<span class="empty-state-text">${escapeHTML(t('addPeopleStep1Hint'))}</span>`;
@@ -2400,6 +2446,7 @@ function atualizarFeedbackDivisao() {
   if (!feedback) return;
 
   const grupo = getGrupoAtivo();
+  if (grupo.gastos.some(g => g.id === document.getElementById('edit-gasto-id')?.value && g.pagadorNaoIdentificado)) { feedback.classList.add('hidden'); return; }
   if (grupo.pessoas.length === 0) {
     feedback.classList.add('hidden');
     return;
@@ -2543,6 +2590,7 @@ function cancelarEdicao() {
   fecharMenuCategoria();
   document.getElementById('edit-gasto-id').value = '';
   document.getElementById('form-gasto')?.reset();
+  document.querySelector('#pagador-gasto option[value="__splitrao_unknown__"]')?.remove();
   dataGastoSelecionada = getTodayISO();
   atualizarLabelDataGasto();
   categoriaSelecionada = null;
@@ -2584,7 +2632,10 @@ function iniciarEdicaoGasto(gastoId) {
   }
   atualizarSeletorMoedaUI();
 
-  if (grupo.pessoas.includes(g.pagador)) {
+  if (g.pagadorNaoIdentificado) {
+    renderPagadorSelect();
+    document.getElementById('pagador-gasto').value = '__splitrao_unknown__';
+  } else if (grupo.pessoas.includes(g.pagador)) {
     document.getElementById('pagador-gasto').value = g.pagador;
   }
 
@@ -2707,7 +2758,7 @@ async function apagarLancamento(id) {
   };
 }
 
-// ==================== CÁLCULO DE SALDOS E ACERTOS ====================
+// ===== 15. CÁLCULO DE SALDOS E ACERTOS =====
 function calcularBalancoGrupo(grupo) {
   const pessoas = grupo.pessoas || [];
   const gastos = grupo.gastos || [];
@@ -2746,6 +2797,7 @@ function calcularBalancoGrupo(grupo) {
       continue;
     }
 
+    if (g.pagadorNaoIdentificado) continue;
     const chavePagador = acharChaveStats(g.pagador);
     if (chavePagador && stats[chavePagador]) {
       stats[chavePagador].pagou += valBRL;
@@ -2929,7 +2981,7 @@ function renderSaldosEAcertos() {
   });
 }
 
-// ==================== HISTÓRICO, FILTROS E TOTAIS ====================
+// ===== 16. HISTÓRICO, FILTROS E TOTAIS =====
 function renderFiltroCategorias() {
   const select = document.getElementById('filtro-categoria');
   if (!select) return;
@@ -3009,9 +3061,11 @@ function renderHistorico() {
         </div>
         <div class="gasto-right">
           <span class="gasto-valor pagamento-val">${escapeHTML(valorDisplay)}</span>
+          <button type="button" class="btn-icon-action btn-edit-gasto" title="${escapeHTML(t('editPaymentTitle'))}">✎</button>
           <button type="button" class="btn-icon-action btn-del-gasto" title="Apagar">🗑</button>
         </div>
       `;
+      li.querySelector('.btn-edit-gasto')?.addEventListener('click', () => abrirModalQuitar('', '', '', g));
       li.querySelector('.btn-del-gasto')?.addEventListener('click', () => apagarLancamento(g.id));
     } else {
       li.className = 'gasto-item';
@@ -3031,7 +3085,7 @@ function renderHistorico() {
       li.innerHTML = `
         <div class="gasto-info">
           <strong>${catBadge}${escapeHTML(g.descricao)}${modoBadge}</strong>
-          <small>${escapeHTML(dataPrefix + t('paidByText'))} <strong>${escapeHTML(g.pagador)}</strong> • ${escapeHTML(t('splitWithText'))} ${escapeHTML(partLista.join(', '))}</small>
+          <small>${escapeHTML(dataPrefix + t('paidByText'))} <strong>${escapeHTML(g.pagadorNaoIdentificado ? t('unknownPayer') : g.pagador)}</strong> • ${g.pagadorNaoIdentificado ? escapeHTML(t('noSplit')) : escapeHTML(t('splitWithText') + ' ' + partLista.join(', '))}</small>
         </div>
         <div class="gasto-right">
           <span class="gasto-valor">${escapeHTML(valorDisplay)}</span>
@@ -3166,7 +3220,7 @@ function renderPainelTotais() {
   `;
 }
 
-// ==================== MODAL QUITAR CONTA (COM MULTI-MOEDAS DO APP) ====================
+// ===== 17. PAGAMENTOS E QUITAÇÕES =====
 function sincronizarMoedasQuitar() {
   const origem = document.getElementById('moeda-gasto');
   const destino = document.getElementById('quitar-moeda');
@@ -3260,13 +3314,30 @@ async function buscarCotacaoQuitar() {
   }
 }
 
-function abrirModalQuitar(dePadrao = '', paraPadrao = '', valorPadrao = '') {
+let edicaoPagamento = null;
+
+function atualizarTituloQuitar() {
+  const titulo = document.getElementById('quitar-titulo');
+  const botao = document.getElementById('btn-confirmar-quitar');
+  titulo.textContent = t(edicaoPagamento ? 'editPaymentTitle' : 'settleModalTitle');
+  botao.textContent = t(edicaoPagamento ? 'savePaymentChanges' : 'confirmPaymentBtn');
+}
+
+function abrirModalQuitar(dePadrao = '', paraPadrao = '', valorPadrao = '', pagamento = null) {
   const grupo = getGrupoAtivo();
   if (!grupo.pessoas || grupo.pessoas.length < 2) {
     alert(t('need2PeopleAlert'));
     return;
   }
 
+  edicaoPagamento = pagamento ? { grupoId: grupo.id, id: pagamento.id } : null;
+  if (pagamento) {
+    const partes = extrairPartesPagamento(pagamento);
+    dePadrao = partes.de;
+    paraPadrao = partes.para;
+    valorPadrao = pagamento.valor;
+  }
+  atualizarTituloQuitar();
   sincronizarMoedasQuitar();
 
   const selDe = document.getElementById('quitar-de');
@@ -3299,21 +3370,27 @@ function abrirModalQuitar(dePadrao = '', paraPadrao = '', valorPadrao = '') {
     selPara.selectedIndex = selDe.selectedIndex === 0 ? 1 : 0;
   }
 
-  if (selMoeda) selMoeda.value = 'BRL';
-  if (inpTaxa) inpTaxa.value = '';
+  if (selMoeda) {
+    const moeda = pagamento?.moeda || 'BRL';
+    if (!Array.from(selMoeda.options).some(o => o.value === moeda)) selMoeda.add(new Option(moeda, moeda));
+    selMoeda.value = moeda;
+  }
+  if (inpTaxa) inpTaxa.value = pagamento?.taxaCambio || '';
   if (statusEl) statusEl.textContent = '';
   if (inpVal) inpVal.value = valorPadrao || '';
-  if (inpObs) inpObs.value = '';
+  if (inpObs) inpObs.value = pagamento?.obs || '';
+  document.getElementById('quitar-data').value = pagamento ? normalizarDataISOOrdenacao(pagamento.data).replace('0000-00-00', '') : getTodayISO();
   atualizarUIQuitarMoeda();
 
   document.getElementById('modal-quitar')?.classList.remove('hidden');
 }
 
 function fecharModalQuitar() {
+  edicaoPagamento = null;
   document.getElementById('modal-quitar')?.classList.add('hidden');
 }
 
-// ==================== RELATÓRIO E BALANÇO GLOBAL ====================
+// ===== 18. RELATÓRIO E BALANÇO GLOBAL =====
 let ultimoTextoWhatsApp = '';
 
 function abrirRelatorio() {
@@ -3359,7 +3436,7 @@ function abrirRelatorio() {
       <tr>
         <td>${escapeHTML(g.data ? formatDateBR(g.data) : '-')}</td>
         <td>${escapeHTML(g.descricao)}</td>
-        <td>${escapeHTML(g.pagador)}</td>
+        <td>${escapeHTML(g.pagadorNaoIdentificado ? t('unknownPayer') : g.pagador)}</td>
         <td>${escapeHTML(formatMoney(getValorEmBRL(g), 'BRL'))}</td>
       </tr>
     `).join('');
@@ -3540,7 +3617,7 @@ function abrirModalGlobal() {
   document.getElementById('modal-global')?.classList.remove('hidden');
 }
 
-// ==================== BACKUP E IMPORTAÇÃO (PADRÃO + SPLITWISE) ====================
+// ===== 19. BACKUP E IMPORTAÇÃO (PADRÃO + SPLITWISE) =====
 function exportarBackupJSON() {
   const payload = {
     app: 'SplitRAO',
@@ -3580,14 +3657,7 @@ function normalizarDataFlexivel(dataRaw) {
   return getTodayISO();
 }
 
-function mapearCategoriaSplitwise(catRaw) {
-  const txt = normalizarTexto(catRaw).replace(/[^a-z0-9]+/g, ' ').trim();
-  if (!txt) return null;
-  for (const regra of REGRAS_AUTO_CATEGORIA) {
-    if (normalizarTexto(regra.categoria) === txt || regra.palavras.some(p => normalizarTexto(p).replace(/[^a-z0-9]+/g, ' ').trim() === txt)) return regra.categoria;
-  }
-  return null;
-}
+
 
 function parseLinhaCSV(linha, separador) {
   const cols = [];
@@ -3681,6 +3751,10 @@ function converterSplitwiseCSVParaGrupo(csvText, nomeArquivo = 'Splitwise') {
     const quemPagou = Object.entries(deltas).sort((a, b) => b[1] - a[1])[0]?.[0] || Array.from(pessoasSet)[0] || 'Participante';
     const quemRecebeu = Object.entries(deltas).sort((a, b) => a[1] - b[1])[0]?.[0] || '';
 
+    if (Object.keys(deltas).length === 0) {
+      gastos.push({id: gerarId('gst'), tipo:'despesa', descricao:desc, categoria:mapearCategoriaSplitwise(idxCat >= 0 ? cols[idxCat] : '') || detectarCategoriaAutomatica(desc) || 'Geral', data, valor:valorTotal, moeda, taxaCambio:1, valorBRL:valorTotal, pagador:null, pagadorNaoIdentificado:true, modoDivisao:'exato', divisao:{}, participantes:[]});
+      continue;
+    }
     if (isPayment && quemPagou && quemRecebeu && quemPagou !== quemRecebeu) {
       gastos.push({
         id: gerarId('pgt'),
@@ -3914,7 +3988,7 @@ function extrairGruposDeJSON(parsed) {
   return [];
 }
 
-async function persistirGruposImportados(entradas) {
+async function persistirGruposImportados(entradas, { novoCodigo = false } = {}) {
   if (!Array.isArray(entradas) || entradas.length === 0) return null;
 
   let primeiroIdNovo = null;
@@ -3926,16 +4000,19 @@ async function persistirGruposImportados(entradas) {
       ? gdata.id.trim()
       : (typeof chaveOriginal === 'string' && chaveOriginal.trim() ? chaveOriginal.trim() : gerarId('grp'));
 
-    const gid = state.grupos[idCandidato] ? gerarId('grp') : idCandidato;
-
-    const norm = normalizarEstruturaGrupo(gid, { ...gdata, id: gid });
+    let gid = state.grupos[idCandidato] ? gerarId('grp') : idCandidato;
+    let norm = normalizarEstruturaGrupo(gid, { ...gdata, id: gid });
+    if (novoCodigo) {
+      norm = await reservarNovoGrupo(norm);
+      gid = norm.id;
+    }
     state.grupos[gid] = norm;
     cloudGroupsCache[gid] = norm;
 
     if (!primeiroIdNovo) primeiroIdNovo = gid;
 
     if (currentUser) {
-      await setDoc(getGroupDocRef(gid), {
+      if (!novoCodigo) await setDoc(getGroupDocRef(gid), {
         id: norm.id,
         nome: norm.nome,
         order: typeof norm.order === 'number' ? norm.order : 0,
@@ -3989,6 +4066,7 @@ async function importarBackupJSON(file) {
     );
 
     let entradas = [];
+    let novoCodigo = true;
     if (isCSV) {
       const grupoCSV = converterSplitwiseCSVParaGrupo(text, file.name);
       if (grupoCSV) {
@@ -3997,6 +4075,7 @@ async function importarBackupJSON(file) {
     } else {
       const parsed = JSON.parse(text);
       entradas = extrairGruposDeJSON(parsed);
+      novoCodigo = !(parsed?.app === "SplitRAO" && parsed?.state?.grupos);
     }
 
     if (entradas.length === 0) {
@@ -4005,7 +4084,7 @@ async function importarBackupJSON(file) {
       return;
     }
 
-    const importadoId = await persistirGruposImportados(entradas);
+    const importadoId = await persistirGruposImportados(entradas, { novoCodigo });
     if (!importadoId) {
       setSaveStatus('statusSaveError');
       alert('Falha ao importar os grupos do arquivo.');
@@ -4025,14 +4104,13 @@ async function processarImportacaoPendenteSplitwise() {
   const raw = localStorage.getItem(SPLITWISE_IMPORT_KEY);
   if (!raw) return;
 
-  localStorage.removeItem(SPLITWISE_IMPORT_KEY);
   isSavingCloud = true;
   setSaveStatus('statusSaving');
 
   try {
     const parsed = JSON.parse(raw);
     const entradas = extrairGruposDeJSON(parsed);
-    await persistirGruposImportados(entradas);
+    if (await persistirGruposImportados(entradas, { novoCodigo: true })) localStorage.removeItem(SPLITWISE_IMPORT_KEY);
   } catch (e) {
     console.error('Erro ao importar grupo pendente do Splitwise:', e);
     setSaveStatus('statusSaveError');
@@ -4041,7 +4119,7 @@ async function processarImportacaoPendenteSplitwise() {
   }
 }
 
-// ==================== RENDERIZAÇÃO GERAL ====================
+// ===== 20. RENDERIZAÇÃO GERAL =====
 function renderResumoGlobalUsuario() {
   const banner = document.getElementById('global-user-banner');
   if (!banner) return;
@@ -4105,7 +4183,7 @@ function renderTudo() {
   renderPainelTotais();
 }
 
-// ==================== EVENT LISTENERS ====================
+// ===== 21. EVENTOS DA INTERFACE =====
 function initListeners() {
   sincronizarMoedasQuitar();
 
@@ -4236,7 +4314,7 @@ function initListeners() {
   });
 
   document.getElementById('btn-exportar-json')?.addEventListener('click', () => {
-    setMenu3DotsAberto(false);
+    setMenu3DotsHomeAberto(false);
     exportarBackupJSON();
   });
 
@@ -4374,7 +4452,9 @@ function initListeners() {
     }
 
     const valorBRL = valor * (moeda === 'BRL' ? 1 : taxaCambio);
-    const divisaoObj = construirDivisaoParaSalvar(valorBRL);
+    const eraDesconhecido = grupo.gastos.some(g => g.id === editId && g.pagadorNaoIdentificado);
+    const semPagador = eraDesconhecido && pagador === '__splitrao_unknown__';
+    const divisaoObj = eraDesconhecido ? { modoDivisao: 'exato', divisao: semPagador ? {} : { [pagador]: valorBRL }, participantes: semPagador ? [] : [pagador] } : construirDivisaoParaSalvar(valorBRL);
     if (!divisaoObj) return;
 
     const novoGasto = {
@@ -4387,7 +4467,8 @@ function initListeners() {
       moeda,
       taxaCambio,
       valorBRL,
-      pagador,
+      pagador: semPagador ? null : pagador,
+      pagadorNaoIdentificado: semPagador,
       ...divisaoObj
     };
 
@@ -4434,6 +4515,8 @@ function initListeners() {
     const moeda = document.getElementById('quitar-moeda')?.value || 'BRL';
     const valor = parseFloat(document.getElementById('quitar-valor')?.value) || 0;
     const obs = document.getElementById('quitar-obs')?.value?.trim() || '';
+    const data = document.getElementById('quitar-data').value;
+    if (!data) return;
 
     if (!de || !para || de === para) {
       alert(t('diffPeopleAlert'));
@@ -4453,13 +4536,20 @@ function initListeners() {
     const valorBRL = valor * taxaCambio;
     const grupo = getGrupoAtivo();
 
-    if (moeda !== 'BRL') {
+    // Edição substitui o registro original, sem duplicar a transferência.
+    const indice = edicaoPagamento ? grupo.gastos.findIndex(g => g.id === edicaoPagamento.id && g.tipo === 'pagamento') : -1;
+    if (edicaoPagamento && (edicaoPagamento.grupoId !== grupo.id || indice < 0)) {
+      fecharModalQuitar();
+      return;
+    }
+    if (moeda !== 'BRL' && !edicaoPagamento) {
       grupo.taxasCambio = grupo.taxasCambio || {};
       grupo.taxasCambio[moeda] = taxaCambio;
     }
 
-    grupo.gastos.push({
-      id: gerarId('pgt'),
+    const registro = {
+      ...(indice >= 0 ? grupo.gastos[indice] : {}),
+      id: edicaoPagamento?.id || gerarId('pgt'),
       tipo: 'pagamento',
       de,
       para,
@@ -4468,9 +4558,11 @@ function initListeners() {
       taxaCambio,
       valorBRL,
       obs,
-      data: getTodayISO(),
+      data,
       descricao: obs ? t('settlementObsDesc', { obs }) : t('settlementDefaultDesc')
-    });
+    };
+    if (indice >= 0) grupo.gastos[indice] = registro;
+    else grupo.gastos.push(registro);
 
     await salvarGrupoNaNuvem(grupo);
     fecharModalQuitar();
@@ -4610,7 +4702,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-novo-gasto-home')?.addEventListener('click', aoClicarNovoGastoNaHome);
 });
 
-// ==================== BOOT ====================
+// ===== 22. INICIALIZAÇÃO DO APP =====
 state = carregarEstadoLocal();
 dataGastoSelecionada = getTodayISO();
 iniciarNavegacao();

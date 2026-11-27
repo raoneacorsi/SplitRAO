@@ -235,7 +235,7 @@ export const I18N = {
     badgePagar: 'A pagar',
     badgeReceber: 'A receber',
     badgeQuitado: 'Quitado',
-    editMyNameBtn: '✏️ Alterar meu nome',
+    editMyNameBtn: 'Alterar meu nome',
     editMyNamePrompt: 'Digite o novo nome que você quer usar nos grupos:',
     myNameUpdatedAlert: '✅ Seu nome foi atualizado para "{name}" em todos os grupos!',
     myNameEmptyAlert: 'Digite um nome válido.', 
@@ -475,7 +475,7 @@ export const I18N = {
     badgePagar: 'Por pagar',
     badgeReceber: 'Por cobrar',
     badgeQuitado: 'Al día',
-    editMyNameBtn: '✏️ Cambiar mi nombre',
+    editMyNameBtn: 'Cambiar mi nombre',
     editMyNamePrompt: 'Escribe el nuevo nombre que quieres usar en los grupos:',
     myNameUpdatedAlert: '✅ ¡Tu nombre se actualizó a "{name}" en todos los grupos!',
     myNameEmptyAlert: 'Escribe un nombre válido.',
@@ -715,7 +715,7 @@ export const I18N = {
     badgePagar: 'To pay',
     badgeReceber: 'To receive',
     badgeQuitado: 'Settled',
-    editMyNameBtn: '✏️ Change my name',
+    editMyNameBtn: 'Change my name',
     editMyNamePrompt: 'Enter the new name you want to use across groups:',
     myNameUpdatedAlert: '✅ Your name has been updated to "{name}" across all groups!',
     myNameEmptyAlert: 'Please enter a valid name.',
@@ -942,3 +942,18 @@ Object.assign(I18N.pt, {"catMercado": "Mercado", "catComerFora": "Comer fora", "
 Object.assign(I18N.en, {"catMercado": "Groceries", "catComerFora": "Dining out", "catEntretenimento": "Entertainment", "catTransporte": "Transport", "catSaude": "Health", "catCasa": "Home", "catEducacao": "Education", "catPresentes": "Gifts", "catLazer": "Leisure", "catVestuario": "Clothing", "catSeguros": "Insurance / Taxes", "catPets": "Pets", "catGeral": "General"});
 
 Object.assign(I18N.es, {"catMercado": "Supermercado", "catComerFora": "Comer fuera", "catEntretenimento": "Entretenimiento", "catTransporte": "Transporte", "catSaude": "Salud", "catCasa": "Casa", "catEducacao": "Educación", "catPresentes": "Regalos", "catLazer": "Ocio", "catVestuario": "Ropa", "catSeguros": "Seguros / Impuestos", "catPets": "Mascotas", "catGeral": "General"});
+
+Object.assign(I18N.pt,{renameGroupTitle:'Editar nome do grupo',saveGroupName:'Salvar alterações',unknownPayer:'Pagador não identificado',noSplit:'Sem divisão'});
+Object.assign(I18N.en,{renameGroupTitle:'Edit group name',saveGroupName:'Save changes',unknownPayer:'Unknown payer',noSplit:'Not split'});
+Object.assign(I18N.es,{renameGroupTitle:'Editar nombre del grupo',saveGroupName:'Guardar cambios',unknownPayer:'Pagador no identificado',noSplit:'Sin división'});
+
+// Textos de edição de quitação e reserva de grupos.
+Object.assign(I18N.pt, {"editPaymentTitle": "Editar pagamento", "savePaymentChanges": "Salvar alterações", "paymentDate": "Data", "groupCodeError": "Não foi possível reservar o código do grupo. Verifique a conexão e tente novamente."});
+Object.assign(I18N.en, {"editPaymentTitle": "Edit payment", "savePaymentChanges": "Save changes", "paymentDate": "Date", "groupCodeError": "Could not reserve the group code. Check your connection and try again."});
+Object.assign(I18N.es, {"editPaymentTitle": "Editar pago", "savePaymentChanges": "Guardar cambios", "paymentDate": "Fecha", "groupCodeError": "No se pudo reservar el código del grupo. Comprueba la conexión e inténtalo de nuevo."});
+
+Object.assign(I18N.pt, {"leaveOnlyText": "Você pode sair sem apagar despesas, pagamentos ou dívidas.", "leaveDeleteError": "Não foi possível concluir a operação. Verifique sua conexão e permissões."});
+
+Object.assign(I18N.en, {"leaveOnlyText": "You can leave without deleting expenses, payments or debts.", "leaveDeleteError": "Could not complete the operation. Check your connection and permissions."});
+
+Object.assign(I18N.es, {"leaveOnlyText": "Puedes salir sin borrar gastos, pagos ni deudas.", "leaveDeleteError": "No se pudo completar la operación. Comprueba la conexión y los permisos."});

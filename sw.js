@@ -1,15 +1,17 @@
-const CACHE_NAME = 'splitrao-v22';
+// 01. Versão e arquivos do cache
+const CACHE_NAME = 'splitrao-v25';
 const ASSETS = [
   './',
   './index.html',
   './conversor.html',
   './style.css',
-  './app.js?v=22',
+  './app.js?v=25',
   './i18n.js',
   './categorias-keywords.js',
   './manifest.json'
 ];
 
+// 02. Instalação e limpeza de versões antigas
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
@@ -26,6 +28,7 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+// 03. Rede prioritária, cache como alternativa offline
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
