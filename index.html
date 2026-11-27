@@ -32,50 +32,40 @@
             </div>
           </div>
 
-          <div class="lang-dropdown" id="lang-switcher">
-            <button type="button" class="lang-current-btn" aria-expanded="false" aria-haspopup="listbox" title="Idioma" data-i18n-title="languageLabel">
-              <span class="lang-current-flag"></span>
-              <span class="lang-caret">▾</span>
-            </button>
-            <div class="lang-menu hidden" role="listbox">
-              <button type="button" class="lang-option active" data-lang="pt" title="Português (Brasil)">
-                <svg class="flag-icon" viewBox="0 0 28 20" width="20" height="14" aria-hidden="true">
-                  <rect width="28" height="20" rx="2" fill="#009c3b"/>
-                  <polygon points="14,2.5 25,10 14,17.5 3,10" fill="#ffdf00"/>
-                  <circle cx="14" cy="10" r="4.2" fill="#002776"/>
-                  <path d="M10.1,9.3 Q14,8.2 17.9,10.7" fill="none" stroke="#ffffff" stroke-width="0.9"/>
-                </svg>
+            <!-- 03. Menu de 3 tracinhos da Tela Inicial -->
+            <div class="menu-3dots-wrap" id="menu-3dots-home-wrap">
+              <button type="button" id="btn-menu-3dots-home" class="btn-3dots" aria-expanded="false" aria-label="Menu inicial" data-i18n-aria-label="homeMenu" title="Opções" data-i18n-title="optionsLabel">
+                <span></span>
+                <span></span>
+                <span></span>
               </button>
-              <button type="button" class="lang-option" data-lang="es" title="Español (España)">
-                <svg class="flag-icon" viewBox="0 0 28 20" width="20" height="14" aria-hidden="true">
-                  <rect width="28" height="20" rx="2" fill="#aa151b"/>
-                  <rect y="5" width="28" height="10" fill="#f1bf00"/>
-                  <rect x="6.5" y="7.5" width="3" height="4.5" rx="0.6" fill="#aa151b"/>
-                </svg>
-              </button>
-              <button type="button" class="lang-option" data-lang="en" title="English (USA)">
-                <svg class="flag-icon" viewBox="0 0 28 20" width="20" height="14" aria-hidden="true">
-                  <rect width="28" height="20" rx="2" fill="#ffffff"/>
-                  <g fill="#b22234">
-                    <rect y="0" width="28" height="1.54"/>
-                    <rect y="3.08" width="28" height="1.54"/>
-                    <rect y="6.16" width="28" height="1.54"/>
-                    <rect y="9.24" width="28" height="1.54"/>
-                    <rect y="12.32" width="28" height="1.54"/>
-                    <rect y="15.4" width="28" height="1.54"/>
-                    <rect y="18.46" width="28" height="1.54"/>
-                  </g>
-                  <rect width="12.5" height="10.78" rx="1" fill="#3c3b6e"/>
-                  <g fill="#ffffff">
-                    <circle cx="2.5" cy="2.3" r="0.65"/><circle cx="6.25" cy="2.3" r="0.65"/><circle cx="10" cy="2.3" r="0.65"/>
-                    <circle cx="4.35" cy="4.3" r="0.65"/><circle cx="8.15" cy="4.3" r="0.65"/>
-                    <circle cx="2.5" cy="6.3" r="0.65"/><circle cx="6.25" cy="6.3" r="0.65"/><circle cx="10" cy="6.3" r="0.65"/>
-                    <circle cx="4.35" cy="8.3" r="0.65"/><circle cx="8.15" cy="8.3" r="0.65"/>
-                  </g>
-                </svg>
-              </button>
+
+              <div id="dropdown-3dots-home" class="dropdown-3dots hidden">
+                <button type="button" id="btn-minha-conta" class="dropdown-item"><span>👤</span><span data-i18n="accountTitle">Minha conta</span></button>
+                <button type="button" id="btn-multi-invite" class="dropdown-item"><span>👥</span><span data-i18n="multiInvite">Convidar para vários grupos</span></button>
+                <button type="button" id="btn-balanco-global-home" class="dropdown-item">
+                  <span>🌐</span>
+                  <span data-i18n="globalBalanceBtn">Balanço Global</span>
+                </button>
+                <button type="button" id="btn-importar-splitwise" class="dropdown-item">
+                  <span>📥</span>
+                  <span data-i18n="importSplitwiseBtn">Importar do Splitwise</span>
+                </button>
+                <button type="button" id="btn-instalar-app-home" class="dropdown-item hidden">
+                  <span>📲</span>
+                  <span data-i18n="installApp">Instalar aplicativo</span>
+                </button>
+                <button type="button" id="btn-entrar-codigo-home" class="dropdown-item">
+                  <span>🔑</span>
+                  <span data-i18n="codeBtn">Código</span>
+                </button>
+                <button type="button" id="btn-exportar-json" class="dropdown-item">
+                  <span>💾</span>
+                  <span data-i18n="backupBtn">Backup</span>
+                </button>
+                <div style="padding:8px 12px;text-align:center;font-size:11px;opacity:.65;pointer-events:none;">SplitRAO · v28.5</div>
+              </div>
             </div>
-          </div>
         </div>
 
         <div class="brand-row">
@@ -98,43 +88,8 @@
           <div class="card-header-between" style="margin-bottom: 12px;">
             <h2 data-i18n="backToGroupsBtn">Grupos</h2>
 
-            <!-- 03. Menu de 3 tracinhos da Tela Inicial -->
-            <div class="menu-3dots-wrap" id="menu-3dots-home-wrap">
-              <button type="button" id="btn-menu-3dots-home" class="btn-3dots" aria-expanded="false" aria-label="Menu inicial" data-i18n-aria-label="homeMenu" title="Opções" data-i18n-title="optionsLabel">
-                <span></span>
-                <span></span>
-                <span></span>
-              </button>
-
-              <div id="dropdown-3dots-home" class="dropdown-3dots hidden">
-                <button type="button" id="btn-exportar-json" class="dropdown-item">
-                  <span>💾</span>
-                  <span data-i18n="backupBtn">Backup</span>
-                </button>
-                <button type="button" id="btn-multi-invite" class="dropdown-item"><span>👥</span><span data-i18n="multiInvite">Convidar para vários grupos</span></button>
-                <button type="button" id="btn-entrar-codigo-home" class="dropdown-item">
-                  <span>🔑</span>
-                  <span data-i18n="codeBtn">Código</span>
-                </button>
-                <button type="button" id="btn-balanco-global-home" class="dropdown-item">
-                  <span>🌐</span>
-                  <span data-i18n="globalBalanceBtn">Balanço Global</span>
-                </button>
-                <label for="input-importar-json" class="dropdown-item">
-                  <span>📂</span>
-                  <span data-i18n="importBtn">Importar</span>
-                </label>
-                <button type="button" id="btn-importar-splitwise" class="dropdown-item">
-                  <span>📥</span>
-                  <span data-i18n="importSplitwiseBtn">Importar do Splitwise</span>
-                </button>
-                <button type="button" id="btn-instalar-app-home" class="dropdown-item hidden">
-                  <span>📲</span>
-                  <span data-i18n="installApp">Instalar aplicativo</span>
-                </button>
-                <div style="padding:8px 12px;text-align:center;font-size:11px;opacity:.65;pointer-events:none;">SplitRAO · v27.4</div>
-              </div>
-            </div>
+            <!-- Atalho para o Balanço Global -->
+            <button type="button" id="btn-balanco-global-atalho" class="btn-3dots btn-globo-home" data-i18n-title="globalBalanceBtn" data-i18n-aria-label="globalBalanceBtn" title="Balanço Global" aria-label="Balanço Global">🌐</button>
           </div>
 
           <div id="lista-grupos" class="groups-list" role="listbox" aria-label="Grupos" data-i18n-aria-label="backToGroupsBtn"></div>
@@ -183,7 +138,6 @@
               <div id="dropdown-3dots" class="dropdown-3dots hidden">
                 <button type="button" id="btn-moeda-grupo" class="dropdown-item"><span>💱</span><span data-i18n="baseCurrency">Moeda padrão</span></button>
                 <button type="button" id="btn-renomear-grupo" class="dropdown-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1L20 7l-4-4L4 15z"/></svg><span data-i18n="renameGroupTitle">Editar nome do grupo</span></button>
-                <button type="button" id="btn-group-my-name" class="dropdown-item"><span>✏️</span><span data-i18n="groupMyName">Alterar meu nome neste grupo</span></button>
                 <button type="button" id="menu-copiar-codigo" class="dropdown-item">
                   <span>📋</span>
                   <span id="menu-codigo-label"><span data-i18n="copyCodeMenuLabel">Copiar código</span> (<code id="menu-codigo-valor">---</code>)</span>
@@ -533,7 +487,7 @@
 
         <div class="form-group">
           <label for="quitar-data" data-i18n="paymentDate">Data</label>
-          <input type="date" id="quitar-data" required>
+          <div style="position:relative"><button type="button" id="btn-quitar-data" class="btn-date-picker"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span id="label-quitar-data"></span></button><input type="date" id="quitar-data" class="hidden-date-input" required></div>
         </div>
         <div class="form-group" style="margin-bottom: 0;">
           <label for="quitar-obs" data-i18n="settleNoteLabel">Observação (Opcional)</label>
@@ -613,17 +567,7 @@
         </div>
       </div>
 
-      <div class="logo-badge" style="margin: 0 auto 12px; display: flex;" aria-hidden="true">
-        <svg width="28" height="28" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M7 4h18v24l-3-2-3 2-3-2-3 2-3-2-3 2V4z"/>
-          <line x1="16" y1="3" x2="16" y2="29" stroke-dasharray="2.5 2.5"/>
-          <path d="M12.5 11.5h-2a1.5 1.5 0 0 0 0 3h1a1.5 1.5 0 0 1 0 3h-2"/>
-          <line x1="11" y1="10" x2="11" y2="11.5"/>
-          <line x1="11" y1="17.5" x2="11" y2="19"/>
-          <polyline points="19.5 12 22.5 12 21 10.5"/>
-          <polyline points="22.5 17 19.5 17 21 18.5"/>
-        </svg>
-      </div>
+      <img src="icon-512.png" alt="SplitRAO" class="logo-badge brand-icon-img" style="margin: 0 auto 12px; display: flex;">
       <h1 style="text-align: center; font-size: 1.65rem; color: #0c4a6e;">SplitRAO</h1>
       <p style="text-align: center; font-size: 0.88rem; color: var(--text-muted); margin: 6px 0 20px;" data-i18n="authModalDesc">
         Entre para salvar seus grupos na nuvem e acessá-los automaticamente em qualquer aparelho.
@@ -690,7 +634,59 @@
       <div class="modal-footer"><button type="button" id="v26-cancelar" class="btn-secondary" data-i18n="cancelBtn">Cancelar</button><button type="button" id="v26-confirmar" class="btn-primary" style="width:auto;margin-top:0"></button></div>
     </div>
   </div>
-  <script type="module" src="app.js?v=27.4"></script>
+  <!-- 23. Minha conta: interface independente dos grupos -->
+  <div id="modal-conta" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="conta-titulo">
+    <div class="modal-box" style="max-width:440px">
+      <div class="modal-header"><h2 id="conta-titulo" data-i18n="accountTitle">Minha conta</h2><button type="button" id="conta-fechar" class="btn-close" data-i18n-aria-label="closeBtn">×</button></div>
+      <form id="conta-form">
+        <div class="modal-body conta-corpo">
+          <div class="conta-foto-area">
+            <button type="button" id="conta-foto-btn" class="conta-foto" data-i18n-aria-label="accountPhoto"><img id="conta-foto-img" class="hidden" alt=""><span id="conta-iniciais"></span><span class="conta-camera" aria-hidden="true">📷</span></button>
+            <input id="conta-foto-input" type="file" accept="image/*" hidden>
+            <button type="button" id="conta-remover-foto" class="conta-link" data-i18n="accountRemovePhoto">Remover foto</button>
+            <small id="conta-data"></small>
+          </div>
+          <div class="form-group"><label for="conta-nome" data-i18n="accountName">Nome</label><input id="conta-nome" type="text" maxlength="100" required autocomplete="name"></div>
+          <div class="form-group"><label for="conta-email" data-i18n="emailLabel">E-mail</label><input id="conta-email" type="email" readonly></div>
+          <div class="form-group"><label for="conta-idioma" data-i18n="languageLabel">Idioma</label><select id="conta-idioma"><option value="pt">Português</option><option value="es">Español</option><option value="en">English</option></select></div>
+          <div class="form-group"><label for="conta-moeda" data-i18n="accountCurrency">Moeda preferencial</label><select id="conta-moeda"></select></div>
+          <div class="form-group"><label for="conta-tema" data-i18n="accountTheme">Tema</label><select id="conta-tema"><option value="light" data-i18n="accountLight">Claro</option><option value="dark" data-i18n="accountDark">Escuro</option><option value="auto" data-i18n="accountAuto">Automático</option></select></div>
+          <div class="divider"></div>
+          <button type="button" class="conta-link conta-acao" id="conta-senha-abrir" data-i18n="accountPassword">Alterar senha</button>
+          <button type="button" class="conta-link conta-acao" id="conta-reset" data-i18n="forgotPassBtn">Esqueci a senha</button>
+          <p id="conta-status" role="status" class="conta-status"></p>
+          <button type="button" class="conta-link conta-acao" id="conta-sair" data-i18n="logoutBtn">Sair</button>
+          <button type="button" id="conta-excluir-abrir" class="conta-link conta-excluir-link" data-i18n="accountDelete">Excluir conta</button>
+        </div>
+        <div class="modal-footer"><button type="button" id="conta-cancelar" class="btn-secondary" data-i18n="cancelBtn">Cancelar</button><button type="submit" id="conta-salvar" class="btn-primary" style="width:auto;margin-top:0" data-i18n="accountSave">Salvar alterações</button></div>
+      </form>
+    </div>
+  </div>
+  <div id="modal-conta-senha" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="conta-senha-titulo">
+    <div class="modal-box" style="max-width:440px">
+      <div class="modal-header"><h2 id="conta-senha-titulo" data-i18n="accountPassword">Alterar senha</h2><button type="button" id="conta-senha-fechar" class="btn-close" data-i18n-aria-label="closeBtn">×</button></div>
+      <form id="conta-senha-form"><div class="modal-body">
+        <div class="form-group"><label for="conta-senha-atual" data-i18n="accountCurrentPassword">Senha atual</label><input id="conta-senha-atual" type="password" autocomplete="current-password" required></div>
+        <div class="form-group"><label for="conta-senha-nova" data-i18n="accountNewPassword">Nova senha</label><input id="conta-senha-nova" type="password" autocomplete="new-password" minlength="6" required></div>
+        <div class="form-group"><label for="conta-senha-repetir" data-i18n="accountRepeatPassword">Repita a nova senha</label><input id="conta-senha-repetir" type="password" autocomplete="new-password" minlength="6" required></div>
+        <p id="conta-senha-status" role="status" class="conta-status"></p>
+      </div><div class="modal-footer"><button type="button" id="conta-senha-cancelar" class="btn-secondary" data-i18n="cancelBtn">Cancelar</button><button type="submit" id="conta-senha-salvar" class="btn-primary" style="width:auto;margin-top:0" data-i18n="accountSave">Salvar alterações</button></div></form>
+    </div>
+  </div>
+  <!-- 24. Confirmação de exclusão da conta -->
+  <div id="modal-conta-excluir" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="conta-excluir-titulo">
+    <div class="modal-box" style="max-width:440px">
+      <div class="modal-header"><h2 id="conta-excluir-titulo" data-i18n="accountDelete">Excluir conta</h2><button type="button" id="conta-excluir-fechar" class="btn-close" data-i18n-aria-label="closeBtn">×</button></div>
+      <form id="conta-excluir-form"><div class="modal-body conta-corpo">
+        <p data-i18n="accountDeleteWarning">Esta ação é permanente. Os grupos e registros financeiros serão preservados.</p>
+        <div class="form-group"><label for="conta-excluir-palavra" id="conta-excluir-instrucao"></label><input type="text" id="conta-excluir-palavra" autocomplete="off" required></div>
+        <div class="form-group" id="conta-excluir-senha-box"><label for="conta-excluir-senha" data-i18n="accountCurrentPassword">Senha atual</label><input type="password" id="conta-excluir-senha" autocomplete="current-password"></div>
+        <p id="conta-excluir-google" class="hidden" data-i18n="accountDeleteGoogle">Confirme sua identidade com o Google.</p>
+        <p id="conta-excluir-status" class="conta-status" role="status"></p>
+      </div><div class="modal-footer"><button type="button" id="conta-excluir-cancelar" class="btn-secondary" data-i18n="cancelBtn">Cancelar</button><button type="submit" id="conta-excluir-confirmar" class="btn-primary conta-excluir-confirmar" data-i18n="accountDelete">Excluir conta</button></div></form>
+    </div>
+  </div>
+  <script type="module" src="app.js?v=28.5"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

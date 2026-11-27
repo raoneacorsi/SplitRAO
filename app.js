@@ -17,6 +17,7 @@ import {
   sendPasswordResetEmail,
   signOut,
   updateProfile,
+  EmailAuthProvider, reauthenticateWithCredential, updatePassword, reauthenticateWithPopup, deleteUser,
   setPersistence,
   browserLocalPersistence,
   browserSessionPersistence
@@ -214,6 +215,7 @@ function fecharModalPeloVoltar() {
 function abrirTelaListaGrupos(viaHistorico = false) {
   if (viaHistorico !== true && history.state?.[NAV_KEY] === 'detalhe') history.back();
   telaAtiva = 'lista';
+  document.getElementById('menu-3dots-home-wrap')?.classList.remove('hidden');
   cancelarEdicao();
   setFormGastoVisivel(false);
   setMenu3DotsAberto(false);
@@ -234,6 +236,7 @@ function abrirTelaDetalheGrupo(groupId, viaHistorico = false) {
     else history.pushState(novoEstado, '', location.href);
   }
   telaAtiva = 'detalhe';
+  document.getElementById('menu-3dots-home-wrap')?.classList.add('hidden');
   setMenu3DotsHomeAberto(false);
   document.getElementById('view-lista-grupos')?.classList.add('hidden');
   document.getElementById('view-detalhe-grupo')?.classList.remove('hidden');
@@ -479,6 +482,8 @@ async function reservarNovoGrupo(grupo, uid = currentUser?.uid, participanteEsco
     const novo = { ...grupo, id, members: { [uid]: true }, vinculos: {} };
     const nome = participanteEscolhido || grupo.pessoas.find(p => normalizarTexto(p) === normalizarTexto(getNomeUsuarioEfetivo()));
     if (nome) novo.vinculos[uid] = nome;
+    // Importações não herdam preferências de nome de outro grupo.
+    if (participanteEscolhido) novo.nomesPadrao = { [uid]: participanteEscolhido === getNomeUsuarioEfetivo() };
     novo.participantesSemApp = participantesSemVinculo(novo);
     if (!uid) throw new Error('Authentication required');
     const reservado = await runTransaction(db, async tx => {
@@ -720,6 +725,7 @@ function normalizarEstruturaGrupo(id, raw) {
     meuParticipante,
     members: membrosReais(g),
     vinculos: { ...(g.vinculos || {}) },
+    nomesPadrao: { ...(g.nomesPadrao || {}) },
     moedaBase: moedaBase(g),
     moedaReferencia: moedaReferencia(g),
     fatoresMoeda: { ...(g.fatoresMoeda || {}) },
@@ -912,8 +918,9 @@ async function ingressarGrupo(id, uid, escolha, nomeNovo) {
       renomearNomeEmGrupo(grupo, nome, nomeNovo);
       grupo.vinculos[uid] = nomeNovo;
     }
+    if (!membrosReais(data)[uid] || !pessoas.includes(data.vinculos?.[uid])) grupo.nomesPadrao[uid] = grupo.vinculos[uid] === getNomeUsuarioEfetivo();
     grupo.participantesSemApp = participantesSemVinculo(grupo);
-    tx.update(ref, { pessoas: grupo.pessoas, vinculos: grupo.vinculos, participantesSemApp: grupo.participantesSemApp, gastos: grupo.gastos, meuParticipante: grupo.meuParticipante || null });
+    tx.update(ref, { pessoas: grupo.pessoas, vinculos: grupo.vinculos, nomesPadrao: grupo.nomesPadrao, participantesSemApp: grupo.participantesSemApp, gastos: grupo.gastos, meuParticipante: grupo.meuParticipante || null });
     tx.update(perfilRef, { groupIds: [...new Set([...(perfil.data().groupIds || []), id])], activeGroupId: id, updatedAt: Date.now() });
     return grupo;
   });
@@ -957,7 +964,7 @@ async function salvarGrupoNaNuvem(grupo) {
       if (moedaBase(remoto) !== moedaBase(grupo) || fatorMoeda(remoto) !== fatorMoeda(grupo) || moedaReferencia(remoto) !== moedaReferencia(grupo)) throw new Error("Group currency changed; reload group");
       tx.update(groupRef, payload);
     });
-    cloudGroupsCache[grupo.id] = normalizarEstruturaGrupo(grupo.id, { ...payload, members: grupo.members, vinculos: grupo.vinculos });
+    cloudGroupsCache[grupo.id] = normalizarEstruturaGrupo(grupo.id, { ...payload, members: grupo.members, vinculos: grupo.vinculos, nomesPadrao: grupo.nomesPadrao });
     const agora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     setSaveStatus('statusSyncedAt', { time: agora });
   } catch (err) {
@@ -1217,6 +1224,7 @@ function assinarPerfilUsuario(uid) {
       renderAuthUI();
       renderTudo();
     }
+    contaAplicarPerfil(data);
     const groupIds = Array.isArray(data.groupIds) ? data.groupIds : [];
     let mudouLista = false;
 
@@ -1305,6 +1313,7 @@ function renderAuthUI() {
         avatar.classList.add('hidden');
       }
     }
+    contaAtualizarAvatar();
     mainApp?.classList.remove('hidden');
     authGate?.classList.add('hidden');
   } else {
@@ -1409,6 +1418,12 @@ function initAuthListeners() {
   });
 
   onAuthStateChanged(auth, async (user) => {
+    contaPrefs = {};
+    contaSessao++;
+    contaEl('modal-conta').classList.add('hidden');
+    contaEl('modal-conta-senha').classList.add('hidden');
+    contaEl('modal-conta-excluir').classList.add('hidden');
+    contaEl('conta-excluir-form').reset();
     currentUser = user || null;
     if (currentUser) {
       if (authMode === 'register') {
@@ -1420,6 +1435,7 @@ function initAuthListeners() {
       try {
         const userData = await garantirPerfilUsuarioNaNuvem(currentUser);
         await carregarGruposDoUsuario(userData);
+        contaAplicarPerfil(userData);
         assinarPerfilUsuario(currentUser.uid);
         await processarConviteDaURL();
         await processarImportacaoPendenteSplitwise();
@@ -1487,6 +1503,7 @@ function aplicarIdiomaNaInterface() {
 
   setModoAuth(authMode);
   atualizarLabelDataGasto();
+  atualizarDataQuitacao();
   atualizarSeletorMoedaUI();
 
   const btnSubmitGasto = document.getElementById('btn-submit-gasto');
@@ -1529,6 +1546,7 @@ function initLanguageSwitcher() {
         currentLang = novoLang;
         localStorage.setItem(LANG_STORAGE_KEY, currentLang);
         aplicarIdiomaNaInterface();
+        if (currentUser) setDoc(getUserProfileRef(currentUser.uid), {accountPreferences:{language:currentLang}}, {merge:true}).catch(console.warn);
       });
     });
   });
@@ -1869,7 +1887,7 @@ function solicitarNomeNovoGrupo({ perfil = false, renomear = false, nomeAtual = 
   const campoMoeda = document.getElementById('novo-grupo-moeda-campo');
   campoMoeda.classList.toggle('hidden', perfil || renomear);
   const seletorMoeda = document.getElementById('novo-grupo-moeda');
-  seletorMoeda.value = 'BRL';
+  seletorMoeda.value = MOEDAS[contaPrefs.currency] ? contaPrefs.currency : 'BRL';
   const buscaMoeda = seletorMoeda.previousElementSibling;
   if (buscaMoeda?.dataset.i18nPlaceholder === 'currencySearch') {
     buscaMoeda.value = '';
@@ -1927,6 +1945,7 @@ async function criarNovoGrupo() {
   if (nomeUsuario) {
     novoGrupo.pessoas.push(nomeUsuario);
     novoGrupo.meuParticipante = nomeUsuario;
+    if (currentUser) novoGrupo.nomesPadrao = { [currentUser.uid]: true };
   }
 
   try {
@@ -2190,7 +2209,7 @@ function camposParticipante(corpo, nomes) {
   if (nomes.length) select.value = '__selecionar__';
   const atualizar = () => {
     input.disabled = select.value === '__selecionar__';
-    input.value = input.disabled ? '' : (select.value || getNomeUsuarioEfetivo());
+    input.value = getNomeUsuarioEfetivo();
   };
   select.onchange=atualizar; atualizar();
   const label = document.createElement('label'); label.textContent=t('multiName');
@@ -2264,27 +2283,47 @@ async function abrirConvites(params) {
   }
   if (primeiro) { state.grupoAtivoId=primeiro; salvarEstadoLocal(); assinarGrupoAtivo(primeiro); if (ids.length===1) abrirTelaDetalheGrupo(primeiro); else abrirTelaListaGrupos(); }
 }
-async function renomearMeuNomeV26(id, nome) {
+async function renomearMeuNomeV26(id, nome, usarPadrao = false, somentePadrao = false) {
   const uid = currentUser.uid;
   return runTransaction(db, async tx => {
     const ref = getGroupDocRef(id), snap = await tx.get(ref);
     if (!snap.exists() || !membrosReais(snap.data())[uid]) throw new Error('Group unavailable');
     const data = snap.data(), grupo = normalizarEstruturaGrupo(id,data);
-    const antigo = getMeParticipantName(grupo);
+    const antigo = grupo.vinculos[uid];
+    if (somentePadrao && (grupo.nomesPadrao[uid] !== true || antigo === nome)) return null;
     if (!antigo || grupo.pessoas.some(p => p !== antigo && normalizarTexto(p) === normalizarTexto(nome))) throw new Error('Duplicate or unavailable participant');
+    if (!grupo.pessoas.includes(antigo)) throw new Error("Participant unavailable");
     renomearNomeEmGrupo(grupo, antigo, nome);
     grupo.vinculos[uid] = nome;
-    tx.update(ref, { pessoas:grupo.pessoas, gastos:grupo.gastos, participantesSemApp:grupo.participantesSemApp, vinculos:grupo.vinculos, meuParticipante:grupo.meuParticipante || null });
+    grupo.nomesPadrao[uid] = usarPadrao;
+    tx.update(ref, { pessoas:grupo.pessoas, gastos:grupo.gastos, participantesSemApp:grupo.participantesSemApp, vinculos:grupo.vinculos, nomesPadrao:grupo.nomesPadrao, meuParticipante:grupo.meuParticipante || null });
     return grupo;
   });
 }
-async function editarMeuNomeV26() {
+// Renomeia somente participantes livres, conferindo o vínculo no servidor.
+async function renomearParticipanteSemApp(id, antigo, nome) {
+  const uid = currentUser.uid;
+  return runTransaction(db, async tx => {
+    const ref = getGroupDocRef(id), snap = await tx.get(ref);
+    if (!snap.exists() || snap.data().deleted || !membrosReais(snap.data())[uid]) throw new Error('Group unavailable');
+    const data = snap.data();
+    if (!participantesSemVinculo(data).includes(antigo)) throw new Error('Participant unavailable');
+    const grupo = normalizarEstruturaGrupo(id, data);
+    if (!grupo.pessoas.includes(antigo) || grupo.pessoas.some(p => p !== antigo && normalizarTexto(p) === normalizarTexto(nome))) throw new Error('Duplicate or unavailable participant');
+    renomearNomeEmGrupo(grupo, antigo, nome);
+    tx.update(ref, { pessoas:grupo.pessoas, gastos:grupo.gastos, participantesSemApp:grupo.participantesSemApp, meuParticipante:grupo.meuParticipante || null });
+    return grupo;
+  });
+}
+async function editarMeuNomeV26(participante = null) {
   const grupo = getGrupoAtivo();
-  const atual = getMeParticipantName(grupo);
+  const proprio = participante === null;
+  const atual = proprio ? getMeParticipantName(grupo) : participante;
+  if (!proprio && !participantesSemVinculo(grupo).includes(atual)) return;
   if (!atual) { try { await abrirConvites(new URLSearchParams({grupo:grupo.id})); } catch(e) { console.error(e); alert(t('multiError')); } return; }
-  const nome = await modalSelecao(t('groupMyName'), (corpo,fechar) => { const input=document.createElement('input'); input.type='text'; input.value=atual; input.style.width='100%'; input.style.marginTop='6px'; const campo=document.createElement('div'); campo.className='form-group'; campo.style.marginBottom='0'; const label=document.createElement('label'); label.textContent=t('multiName'); label.append(input); campo.append(label); corpo.append(campo); botaoV26(corpo,t('saveGroupName'),()=>{if(input.value.trim()) fechar(input.value.trim());}); });
+  const nome = await modalSelecao(t(proprio ? 'groupMyName' : 'editParticipantName'), (corpo,fechar) => { const input=document.createElement('input'); input.type='text'; input.value=atual; input.style.width='100%'; input.style.marginTop='6px'; const campo=document.createElement('div'); campo.className='form-group'; campo.style.marginBottom='0'; const label=document.createElement('label'); label.textContent=t(proprio ? 'multiName' : 'editParticipantName'); label.append(input); campo.append(label); corpo.append(campo); botaoV26(corpo,t('saveGroupName'),()=>{if(input.value.trim()) fechar({nome:input.value.trim(), padrao:false});}); if (proprio) { const padrao=document.createElement('button'); padrao.type='button'; padrao.className='btn-secondary'; padrao.style.marginTop='10px'; padrao.textContent=t('useAccountName'); padrao.onclick=()=>fechar({nome:getNomeUsuarioEfetivo(),padrao:true}); corpo.append(padrao); } });
   if (!nome) return;
-  try { state.grupos[grupo.id] = await renomearMeuNomeV26(grupo.id,nome); renderTudo(); } catch(e) { console.error(e); alert(t('multiError')); }
+  try { const atualizado = proprio ? await renomearMeuNomeV26(grupo.id,nome.nome,nome.padrao) : await renomearParticipanteSemApp(grupo.id,atual,nome.nome); state.grupos[grupo.id] = cloudGroupsCache[grupo.id] = atualizado; salvarEstadoLocal(); renderTudo(); } catch(e) { console.error(e); alert(t('multiError')); }
 }
 
 
@@ -2381,6 +2420,17 @@ function renderListaPessoas() {
       unlinkedNote.textContent = t('unlinkedParticipantTag');
       tag.appendChild(unlinkedNote);
     }
+    if (isMe || isUnlinked) {
+      // Edição de nomes permitidos diretamente na lista de participantes.
+      const btnEditar = document.createElement('button');
+      btnEditar.type = 'button';
+      btnEditar.className = 'tag-edit-me';
+      btnEditar.title = t(isMe ? 'groupMyName' : 'editParticipantName');
+      btnEditar.setAttribute('aria-label', t(isMe ? 'groupMyName' : 'editParticipantName'));
+      btnEditar.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1L20 7l-4-4L4 15z"/></svg>';
+      btnEditar.addEventListener('click', () => editarMeuNomeV26(isMe ? null : pessoa));
+      tag.appendChild(btnEditar);
+    }
 
     const btnRem = document.createElement('button');
     btnRem.type = 'button';
@@ -2433,6 +2483,12 @@ function atualizarBadgeCategoriaAuto() {
   badge.classList.toggle('hidden', !categoriaDetectadaAuto || categoriaSelecionada !== categoriaDetectadaAuto);
 }
 
+// Data da quitação: mesmo padrão visual e formato das despesas.
+function atualizarDataQuitacao() {
+  const data = document.getElementById('quitar-data').value;
+  document.getElementById('label-quitar-data').textContent = data ? formatDateLabel(data) : t('paymentDate');
+  document.getElementById('btn-quitar-data').classList.toggle('custom-date', !!data && data !== getTodayISO());
+}
 function atualizarLabelDataGasto() {
   const label = document.getElementById('label-data-gasto');
   const btn = document.getElementById('btn-data-gasto');
@@ -3602,6 +3658,7 @@ function abrirModalQuitar(dePadrao = '', paraPadrao = '', valorPadrao = '', paga
   if (inpVal) inpVal.value = valorPadrao || '';
   if (inpObs) inpObs.value = pagamento?.obs || '';
   document.getElementById('quitar-data').value = pagamento ? normalizarDataISOOrdenacao(pagamento.data).replace('0000-00-00', '') : getTodayISO();
+  atualizarDataQuitacao();
   atualizarUIQuitarMoeda();
 
   document.getElementById('modal-quitar')?.classList.remove('hidden');
@@ -3741,11 +3798,15 @@ function calcularBalancoGlobalMoeda(gruposLista, moeda) {
 
   gruposLista.forEach(g => {
     const { stats } = calcularBalancoGrupo(g);
+    const meuNome = getMeParticipantName(g);
     Object.values(stats).forEach(s => {
-      const uid = Object.keys(g.vinculos || {}).find(u=>g.vinculos[u]===s.nome);
+      // Identifica o próprio usuário pela mesma rotina do saldo individual.
+      const uid = currentUser?.uid && s.nome === meuNome
+        ? currentUser.uid
+        : Object.keys(g.vinculos || {}).find(u=>g.vinculos[u]===s.nome);
       const chave = uid ? `uid:${uid}` : `grupo:${g.id}:${s.nome}`;
       if (!consolidadoPorPessoa[chave]) {
-        consolidadoPorPessoa[chave] = { nome: s.nome, moeda, saldoTotal: 0, porGrupo: [] };
+        consolidadoPorPessoa[chave] = { nome: uid && uid === currentUser?.uid ? (getNomeUsuarioEfetivo() || s.nome) : s.nome, moeda, saldoTotal: 0, porGrupo: [] };
       }
       consolidadoPorPessoa[chave].saldoTotal = Math.round((consolidadoPorPessoa[chave].saldoTotal + s.saldo) * 100) / 100;
       if (Math.abs(s.saldo) > 0.01) {
@@ -4553,7 +4614,6 @@ function initListeners() {
   });
 
   document.getElementById('btn-multi-invite')?.addEventListener('click', () => { setMenu3DotsHomeAberto(false); criarConviteMultiplo(); });
-  document.getElementById('btn-group-my-name')?.addEventListener('click', () => { setMenu3DotsAberto(false); editarMeuNomeV26(); });
   document.getElementById('btn-compartilhar-grupo')?.addEventListener('click', compartilharConviteGrupo);
 
   const acionarEntrarCodigo = async () => {
@@ -4611,6 +4671,8 @@ function initListeners() {
   });
   document.getElementById('btn-cancelar-edicao')?.addEventListener('click', cancelarEdicao);
 
+  document.getElementById('btn-quitar-data')?.addEventListener('click', () => { const inp = document.getElementById('quitar-data'); if (typeof inp.showPicker === 'function') inp.showPicker(); else inp.click(); });
+  document.getElementById('quitar-data')?.addEventListener('change', atualizarDataQuitacao);
   document.getElementById('btn-data-gasto')?.addEventListener('click', () => {
     const inp = document.getElementById('input-data-gasto');
     if (!inp) return;
@@ -4884,7 +4946,9 @@ function initListeners() {
   };
   document.getElementById('btn-balanco-global')?.addEventListener('click', acionarBalancoGlobal);
   document.getElementById('btn-balanco-global-home')?.addEventListener('click', acionarBalancoGlobal);
+  document.getElementById('btn-balanco-global-atalho')?.addEventListener('click', acionarBalancoGlobal);
 
+  document.getElementById('modal-global')?.addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden'); });
   document.getElementById('btn-fechar-global')?.addEventListener('click', () => {
     document.getElementById('modal-global')?.classList.add('hidden');
   });
@@ -4992,11 +5056,261 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-novo-gasto-home')?.addEventListener('click', aoClicarNovoGastoNaHome);
 });
 
+
+// ===== 23. MINHA CONTA — somente perfil privado =====
+let contaPrefs = {};
+let contaFotoRascunho = null;
+let contaSessao = 0;
+let contaOcupada = false;
+const contaEl = id => document.getElementById(id);
+function contaAplicarPerfil(data = {}) {
+  contaPrefs = data.accountPreferences || {};
+  const idioma = contaPrefs.language;
+  if (['pt','en','es'].includes(idioma) && idioma !== currentLang) {
+    currentLang = idioma;
+    localStorage.setItem(LANG_STORAGE_KEY, idioma);
+    aplicarIdiomaNaInterface();
+  }
+  contaAplicarTema();
+  contaAtualizarAvatar();
+}
+function contaAplicarTema() {
+  const escuro = contaPrefs.theme === 'dark' || (contaPrefs.theme === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+  for (const id of ['modal-conta','modal-conta-senha','modal-conta-excluir']) contaEl(id).classList.toggle('conta-escura', escuro);
+}
+function contaAtualizarAvatar() {
+  const avatar = contaEl('user-avatar');
+  const foto = contaPrefs.photo ?? currentUser?.photoURL;
+  if (foto) avatar.src = foto; else avatar.removeAttribute('src');
+  avatar.classList.toggle('hidden', !foto);
+}
+function contaRenderFoto() {
+  const foto = contaFotoRascunho ?? currentUser?.photoURL;
+  const img = contaEl('conta-foto-img');
+  if (foto) img.src = foto; else img.removeAttribute('src');
+  img.classList.toggle('hidden', !foto);
+  const iniciais = contaEl('conta-iniciais');
+  iniciais.textContent = contaEl('conta-nome').value.trim().split(/\s+/).slice(0,2).map(n=>n[0] || '').join('').toUpperCase() || '?';
+  iniciais.classList.toggle('hidden', !!foto);
+  contaEl('conta-remover-foto').classList.toggle('hidden', !foto);
+}
+function contaFechar() {
+  if (contaOcupada) return;
+  contaSessao++;
+  contaEl('modal-conta').classList.add('hidden');
+  contaEl('conta-foto-input').value = '';
+}
+async function contaAbrir() {
+  if (!currentUser || contaOcupada) return;
+  setMenu3DotsHomeAberto(false);
+  const uid = currentUser.uid, sessao = ++contaSessao;
+  const status = contaEl('conta-status');
+  contaEl('modal-conta').classList.remove('hidden');
+  contaEl('conta-salvar').disabled = true;
+  contaEl('conta-foto-btn').disabled = true;
+  contaEl('conta-remover-foto').disabled = true;
+  status.textContent = t('accountLoading');
+  try {
+    const snap = await getDoc(getUserProfileRef(uid));
+    if (sessao !== contaSessao || currentUser?.uid !== uid) return;
+    if (!snap.exists()) throw new Error('profile missing');
+    const data = snap.data();
+    contaPrefs = data.accountPreferences || {};
+    contaEl('conta-nome').value = data.displayName || getNomeUsuarioEfetivo();
+    contaEl('conta-email').value = currentUser.email || '';
+    contaEl('conta-idioma').value = currentLang;
+    preencherMoedas(contaEl('conta-moeda'));
+    contaEl('conta-moeda').value = MOEDAS[contaPrefs.currency] ? contaPrefs.currency : 'BRL';
+    contaEl('conta-tema').value = contaPrefs.theme || 'light';
+    contaFotoRascunho = contaPrefs.photo ?? null;
+    const dataCriacao = new Date(currentUser.metadata.creationTime);
+    contaEl('conta-data').textContent = Number.isFinite(+dataCriacao) ? t('accountSince',{date:dataCriacao.toLocaleDateString(currentLang,{month:'long',year:'numeric'})}) : '';
+    contaRenderFoto(); contaAplicarTema();
+    status.textContent = '';
+    contaEl('conta-foto-btn').disabled = false;
+    contaEl('conta-remover-foto').disabled = false;
+    contaEl('conta-salvar').disabled = false;
+  } catch(e) { if (sessao === contaSessao) status.textContent = t('accountError'); }
+}
+function initMinhaConta() {
+  contaEl('btn-minha-conta').addEventListener('click', contaAbrir);
+  for (const id of ['conta-fechar','conta-cancelar']) contaEl(id).onclick = contaFechar;
+  contaEl('modal-conta').onclick = e => { if(e.target === contaEl('modal-conta')) contaFechar(); };
+  contaEl('conta-foto-btn').onclick = () => { if (!contaOcupada) contaEl('conta-foto-input').click(); };
+  contaEl('conta-nome').oninput = contaRenderFoto;
+  // Salva apenas a foto, sem aplicar os outros campos em edição.
+  const salvarFotoConta = async (file = null) => {
+    if (!currentUser || contaOcupada || contaEl('conta-salvar').disabled) return;
+    const uid = currentUser.uid, sessao = contaSessao;
+    const status = contaEl('conta-status');
+    const mesmaSessao = () => currentUser?.uid === uid && contaSessao === sessao;
+    contaOcupada = true;
+    for (const id of ['conta-salvar','conta-foto-btn','conta-remover-foto']) contaEl(id).disabled = true;
+    status.textContent = t('accountPhotoSaving');
+    try {
+      const foto = file ? await comprimirImagemArquivo(file,256,.72) : '';
+      if (foto.length > 120000) throw new Error('photo too large');
+      if (!mesmaSessao()) return;
+      await setDoc(getUserProfileRef(uid), {accountPreferences:{photo:foto}}, {merge:true});
+      if (!mesmaSessao()) return;
+      contaFotoRascunho = foto;
+      contaPrefs = {...contaPrefs, photo:foto};
+      contaRenderFoto(); contaAtualizarAvatar();
+      status.textContent = t('accountPhotoSaved');
+    } catch (err) {
+      if (mesmaSessao()) status.textContent = t('accountPhotoSaveError');
+    } finally {
+      contaOcupada = false;
+      if (mesmaSessao()) for (const id of ['conta-salvar','conta-foto-btn','conta-remover-foto']) contaEl(id).disabled = false;
+    }
+  };
+  contaEl('conta-remover-foto').onclick = () => salvarFotoConta();
+  contaEl('conta-foto-input').onchange = e => {
+    const file = e.target.files[0]; e.target.value = '';
+    if (file) salvarFotoConta(file);
+  };
+  contaEl('conta-form').onsubmit = async e => {
+    e.preventDefault(); if (!currentUser || contaOcupada || contaEl('conta-salvar').disabled) return;
+    const nomeAnterior = getNomeUsuarioEfetivo();
+    const user = currentUser, nome = contaEl('conta-nome').value.trim(); if(!nome) return;
+    const prefs = {language:contaEl('conta-idioma').value,currency:contaEl('conta-moeda').value,theme:contaEl('conta-tema').value};
+    contaOcupada = true; contaEl('conta-salvar').disabled = true;
+    try {
+      // Atualiza exclusivamente campos do perfil; nunca escreve groupIds ou groups.
+      await setDoc(getUserProfileRef(user.uid), {displayName:nome,accountPreferences:prefs}, {merge:true});
+      if(currentUser?.uid !== user.uid) return;
+      salvarNomeUsuarioLocal(nome);
+      try { await updateProfile(user,{displayName:nome}); } catch(err) { console.warn('Nome Auth:',err); }
+      renderAuthUI(); contaAplicarPerfil({accountPreferences:{...contaPrefs,...prefs}});
+      // Consulta os vínculos no servidor; nomes antigos sem marcação não são alterados.
+      let falhas = 0;
+      if (nome !== nomeAnterior || getGruposOrdenados().some(g => g.nomesPadrao?.[user.uid] === true && g.vinculos?.[user.uid] !== nome)) {
+        for (const grupo of getGruposOrdenados()) {
+          if (currentUser?.uid !== user.uid) break;
+          try {
+            const atualizado = await renomearMeuNomeV26(grupo.id, nome, true, true);
+            if (atualizado) state.grupos[grupo.id] = atualizado;
+          } catch (err) { falhas++; console.warn('Sincronização de nome:', grupo.id, err); }
+        }
+        renderTudo();
+      }
+      contaOcupada = false; contaFechar();
+      if (falhas) alert(t('accountNameSyncError'));
+    } catch(err) { contaEl('conta-status').textContent = t('accountError'); }
+    finally { contaOcupada = false; contaEl('conta-salvar').disabled = false; }
+  };
+  contaEl('conta-sair').onclick = () => { if(!contaOcupada) { contaFechar(); contaEl('btn-logout').click(); } };
+  contaEl('conta-reset').onclick = async () => {
+    try { if(!currentUser?.email) throw new Error('email'); await sendPasswordResetEmail(auth,currentUser.email); contaEl('conta-status').textContent = t('authResetSentMsg'); }
+    catch(e) { contaEl('conta-status').textContent = traduzirErroAuth(e); }
+  };
+  const senhaForm = contaEl('conta-senha-form');
+  const fecharSenha = () => { if(contaOcupada) return; senhaForm.reset(); contaEl('modal-conta-senha').classList.add('hidden'); };
+  contaEl('conta-senha-abrir').onclick = () => {
+    if(contaOcupada) return;
+    if(!currentUser?.providerData.some(p=>p.providerId==='password')) { contaEl('conta-status').textContent=t('accountGooglePassword'); return; }
+    senhaForm.reset(); contaEl('conta-senha-status').textContent=''; contaEl('modal-conta-senha').classList.remove('hidden');
+  };
+  for(const id of ['conta-senha-fechar','conta-senha-cancelar']) contaEl(id).onclick=fecharSenha;
+  contaEl('modal-conta-senha').onclick=e=>{if(e.target===contaEl('modal-conta-senha')) fecharSenha();};
+  senhaForm.onsubmit=async e=>{
+    e.preventDefault(); if(contaOcupada || !currentUser) return;
+    const user=currentUser, nova=contaEl('conta-senha-nova').value, status=contaEl('conta-senha-status');
+    if(nova!==contaEl('conta-senha-repetir').value){status.textContent=t('accountMismatch');return;}
+    contaOcupada=true; contaEl('conta-senha-salvar').disabled=true;
+    try { await reauthenticateWithCredential(user,EmailAuthProvider.credential(user.email,contaEl('conta-senha-atual').value)); await updatePassword(user,nova); contaOcupada=false; fecharSenha(); contaEl('conta-status').textContent=t('accountPasswordSaved'); }
+    catch(err){status.textContent=traduzirErroAuth(err);}
+    finally{contaOcupada=false;contaEl('conta-senha-salvar').disabled=false;}
+  };
+  // 24. Exclusão da conta: desvincula sem excluir documentos de grupos.
+  const excluirForm = contaEl('conta-excluir-form');
+  const excluirModal = contaEl('modal-conta-excluir');
+  const fecharExcluir = () => { if (!contaOcupada) { excluirForm.reset(); excluirModal.classList.add('hidden'); } };
+  contaEl('conta-excluir-abrir').onclick = () => {
+    if (!currentUser || contaOcupada) return;
+    excluirForm.reset();
+    const senha = currentUser.providerData.some(p => p.providerId === 'password');
+    contaEl('conta-excluir-senha-box').classList.toggle('hidden', !senha);
+    contaEl('conta-excluir-senha').required = senha;
+    contaEl('conta-excluir-google').classList.toggle('hidden', senha);
+    contaEl('conta-excluir-instrucao').textContent = t('accountDeleteType', {word:t('accountDeleteWord')});
+    contaEl('conta-excluir-status').textContent = '';
+    excluirModal.classList.remove('hidden');
+  };
+  for (const id of ['conta-excluir-fechar','conta-excluir-cancelar']) contaEl(id).onclick = fecharExcluir;
+  excluirModal.onclick = e => { if (e.target === excluirModal) fecharExcluir(); };
+  excluirForm.onsubmit = async e => {
+    e.preventDefault();
+    if (!currentUser || contaOcupada || isSavingCloud) return;
+    const user = currentUser, uid = user.uid, status = contaEl('conta-excluir-status');
+    if (contaEl('conta-excluir-palavra').value.trim() !== t('accountDeleteWord')) { status.textContent = t('accountDeleteType',{word:t('accountDeleteWord')}); return; }
+    contaOcupada = true;
+    contaEl('conta-excluir-confirmar').disabled = true;
+    status.textContent = t('accountDeleting');
+    let perfilOriginal = null, limpeza = false, pausado = false;
+    try {
+      if (user.providerData.some(p => p.providerId === 'password')) {
+        await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, contaEl('conta-excluir-senha').value));
+      } else if (user.providerData.some(p => p.providerId === 'google.com')) {
+        await reauthenticateWithPopup(user, googleProvider);
+      } else throw new Error('Unsupported provider');
+      contaEl('conta-excluir-senha').value = '';
+      if (auth.currentUser?.uid !== uid) throw new Error('Session changed');
+      unsubscribeUserDoc?.(); unsubscribeUserDoc = null;
+      unsubscribeGroupDoc?.(); unsubscribeGroupDoc = null;
+      pausado = true;
+      const perfilRef = getUserProfileRef(uid);
+      perfilOriginal = await runTransaction(db, async tx => {
+        const perfil = await tx.get(perfilRef);
+        if (!perfil.exists()) throw new Error('Profile missing');
+        const dataPerfil = perfil.data();
+        const ids = [...new Set(dataPerfil.groupIds || [])];
+        if (ids.length > 100) throw new Error('Too many groups');
+        const grupos = await Promise.all(ids.map(id => tx.get(getGroupDocRef(id))));
+        for (const snap of grupos) {
+          if (!snap.exists()) continue;
+          const data = snap.data(), membros = membrosReais(data), vinculos = {...(data.vinculos || {})};
+          if (!membros[uid] && !Object.hasOwn(vinculos,uid)) continue;
+          const nome = vinculos[uid];
+          delete membros[uid]; delete vinculos[uid];
+          tx.update(snap.ref, {vinculos, participantesSemApp:[...new Set([...(data.participantesSemApp || []), ...(nome ? [nome] : [])])]});
+          atualizarMembros(tx, snap.ref, data, membros);
+        }
+        tx.delete(perfilRef);
+        return dataPerfil;
+      });
+      limpeza = true;
+      await deleteUser(user);
+      // Limpa apenas o cache local da conta removida.
+      for (const key of [STORAGE_KEY_LEGACY, USER_NAME_STORAGE_KEY, ME_BY_GROUP_STORAGE_KEY]) localStorage.removeItem(key);
+      location.reload();
+    } catch (err) {
+      console.error('Exclusão da conta:', err);
+      if (limpeza && auth.currentUser?.uid === uid) {
+        // Auth e Firestore não são atômicos. Recupera o perfil para permitir nova tentativa.
+        try { await setDoc(getUserProfileRef(uid), perfilOriginal, {merge:true}); } catch (restoreErr) { console.error('Recuperação do perfil:', restoreErr); }
+        status.textContent = t('accountDeletePartial');
+      } else status.textContent = err?.code?.startsWith('auth/') ? traduzirErroAuth(err) : t('accountDeleteError');
+      if (pausado && !limpeza && auth.currentUser?.uid === uid) {
+        assinarPerfilUsuario(uid);
+        if (state.grupoAtivoId) assinarGrupoAtivo(state.grupoAtivoId);
+      }
+    } finally {
+      contaEl('conta-excluir-senha').value = '';
+      contaOcupada = false;
+      contaEl('conta-excluir-confirmar').disabled = false;
+    }
+  };
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!excluirModal.classList.contains('hidden')) fecharExcluir();else if(!contaEl('modal-conta-senha').classList.contains('hidden')) fecharSenha();else if(!contaEl('modal-conta').classList.contains('hidden')) contaFechar();}});
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change',contaAplicarTema);
+}
+
 // ===== 22. INICIALIZAÇÃO DO APP =====
 state = carregarEstadoLocal();
 dataGastoSelecionada = getTodayISO();
 iniciarNavegacao();
 initLanguageSwitcher();
+initMinhaConta();
 initAuthListeners();
 initListeners();
 aplicarIdiomaNaInterface();
