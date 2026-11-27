@@ -44,6 +44,14 @@ export const I18N = {
     myBalanceReceiveTotal: 'Você tem {val} a receber no total',
     myBalancePayTotal: 'Você deve {val} no total',
     myBalanceZero: 'Você está quitado neste grupo! 🎉',
+    myBalanceGlobalZero: 'Você está quitado no total dos grupos.',
+    inviteModalTitle: 'Convidar participante',
+    inviteModalText: 'Compartilhe o link para convidar participantes ao grupo.',
+    inviteShareLink: 'Compartilhar link',
+    inviteCopyLink: 'Copiar link',
+    inviteCopySuccess: 'Link copiado!',
+    inviteCopyManual: 'Selecione e copie o link manualmente.',
+    inviteShareError: 'Não foi possível compartilhar. Copie o link.',
     myBalanceReceiveFrom: 'Receber de',
     myBalancePayTo: 'Pagar para',
     myBalanceLinkHint: 'Clique em "👤 Eu" acima para ver seu saldo direto aqui.',
@@ -276,6 +284,14 @@ export const I18N = {
     myBalanceReceiveTotal: 'Tienes {val} por cobrar en total',
     myBalancePayTotal: 'Debes {val} en total',
     myBalanceZero: '¡Estás al día en este grupo! 🎉',
+    myBalanceGlobalZero: 'Estás al día en el total de los grupos.',
+    inviteModalTitle: 'Invitar participante',
+    inviteModalText: 'Comparte el enlace para invitar participantes al grupo.',
+    inviteShareLink: 'Compartir enlace',
+    inviteCopyLink: 'Copiar enlace',
+    inviteCopySuccess: '¡Enlace copiado!',
+    inviteCopyManual: 'Selecciona y copia el enlace manualmente.',
+    inviteShareError: 'No se pudo compartir. Copia el enlace.',
     myBalanceReceiveFrom: 'Cobrar a',
     myBalancePayTo: 'Pagar a',
     myBalanceLinkHint: 'Haz clic en "👤 Yo" arriba para ver tu saldo directo aquí.',
@@ -508,6 +524,14 @@ export const I18N = {
     myBalanceReceiveTotal: 'You are owed {val} in total',
     myBalancePayTotal: 'You owe {val} in total',
     myBalanceZero: 'You are all settled up in this group! 🎉',
+    myBalanceGlobalZero: 'You are all settled up across all groups.',
+    inviteModalTitle: 'Invite participant',
+    inviteModalText: 'Share the link to invite participants to the group.',
+    inviteShareLink: 'Share link',
+    inviteCopyLink: 'Copy link',
+    inviteCopySuccess: 'Link copied!',
+    inviteCopyManual: 'Select and copy the link manually.',
+    inviteShareError: 'Unable to share. Copy the link.',
     myBalanceReceiveFrom: 'Receive from',
     myBalancePayTo: 'Pay to',
     myBalanceLinkHint: 'Click "👤 Me" above to see your direct balance here.',
@@ -879,7 +903,17 @@ export function createTranslator(getLang) {
       Carro: 'catCarro',
       Entretenimento: 'catEntretenimento',
       Transporte: 'catTransporte',
-      Vida: 'catVida'
+      Vida: 'catVida',
+      "Mercado": 'catMercado',
+      "Comer fora": 'catComerFora',
+      "Saúde": 'catSaude',
+      "Educação": 'catEducacao',
+      "Presentes": 'catPresentes',
+      "Lazer": 'catLazer',
+      "Vestuário": 'catVestuario',
+      "Seguros / Impostos": 'catSeguros',
+      "Animais de estimação": 'catPets',
+      "Geral": 'catGeral'
     };
     return mapKey[catId] ? t(mapKey[catId]) : catId;
   }
@@ -902,3 +936,9 @@ Object.assign(I18N.es, {
   deleteEveryoneBtn: 'Eliminar para todos',
   leaveGroupModalText: 'Grupo "{name}":\n• Solo salir: elimina el grupo de tu dispositivo, manteniéndolo en la nube para los demás.\n• Eliminar para todos: elimina definitivamente el grupo de la nube para todos.'
 });
+
+Object.assign(I18N.pt, {"catMercado": "Mercado", "catComerFora": "Comer fora", "catEntretenimento": "Entretenimento", "catTransporte": "Transporte", "catSaude": "Saúde", "catCasa": "Casa", "catEducacao": "Educação", "catPresentes": "Presentes", "catLazer": "Lazer", "catVestuario": "Vestuário", "catSeguros": "Seguros / Impostos", "catPets": "Animais de estimação", "catGeral": "Geral"});
+
+Object.assign(I18N.en, {"catMercado": "Groceries", "catComerFora": "Dining out", "catEntretenimento": "Entertainment", "catTransporte": "Transport", "catSaude": "Health", "catCasa": "Home", "catEducacao": "Education", "catPresentes": "Gifts", "catLazer": "Leisure", "catVestuario": "Clothing", "catSeguros": "Insurance / Taxes", "catPets": "Pets", "catGeral": "General"});
+
+Object.assign(I18N.es, {"catMercado": "Supermercado", "catComerFora": "Comer fuera", "catEntretenimento": "Entretenimiento", "catTransporte": "Transporte", "catSaude": "Salud", "catCasa": "Casa", "catEducacao": "Educación", "catPresentes": "Regalos", "catLazer": "Ocio", "catVestuario": "Ropa", "catSeguros": "Seguros / Impuestos", "catPets": "Mascotas", "catGeral": "General"});

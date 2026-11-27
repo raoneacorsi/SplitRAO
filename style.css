@@ -2078,3 +2078,33 @@ select:focus {
 .group-drag-handle:active {
   cursor: grabbing;
 }
+/* Seletor compacto de categoria da despesa */
+.expense-category-wrap { position: relative; }
+.expense-description-row { display:flex; align-items:stretch; gap:8px; }
+.expense-description-row #desc-gasto { flex:1; min-width:0; width:0; min-height:60px; padding:14px 12px; font-size:1.1rem; border:1px solid #7dd3fc; border-radius:12px; }
+.expense-category-trigger { flex:0 0 64px; min-height:60px; display:grid; place-items:center; border:1px solid #7dd3fc; border-radius:12px; background:var(--primary-light); color:var(--primary); cursor:pointer; }
+.expense-category-trigger svg { width:32px; height:32px; }
+.expense-category-trigger:focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
+.expense-category-trigger:hover { border-color:var(--primary); }
+.expense-description-row #desc-gasto:focus { border-color:var(--primary); }
+.expense-category-menu { position:absolute; top:calc(100% + 6px); right:0; width:min(100%, 360px); z-index:30; padding:10px; background:var(--card, white); border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 24px #0002; grid-template-columns:repeat(3,minmax(0,1fr)); max-height: min(60vh,420px); overflow:auto; }
+.expense-category-menu.hidden { display:none; }
+.expense-category-menu .cat-btn { min-width:0; white-space:normal; overflow-wrap:anywhere; flex-direction:column; justify-content:center; }
+.expense-category-menu .cat-btn svg { width:22px; height:22px; flex-shrink:0; }
+
+/* v21: saldo no cabeçalho e modal de convite */
+.saldo-grupo-cabecalho { flex: 0 1 40%; min-width: 0; text-align: right; font-size: .95rem; font-weight: 700; overflow-wrap: anywhere; }
+.group-hero-row > .menu-3dots-wrap { flex-shrink: 0; }
+.group-hero-name { min-width: 0; }
+.participants-block > .invite-primary-row { margin-top: 12px; }
+.meu-saldo-box > .meu-saldo-detalhes:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.convite-body { display: grid; gap: 12px; }
+.convite-body input { width: 100%; min-width: 0; }
+.convite-body .btn-primary { margin-top: 0; }
+#convite-feedback { font-size: .85rem; color: var(--text-muted); }
+#convite-feedback:empty { display: none; }
+@media (max-width: 420px) { .group-hero-row { gap: 6px; } .group-title-line { gap: 5px; } .saldo-grupo-cabecalho { font-size: .85rem; } }
+
+/* v22: valor do saldo pessoal em destaque, sem quebrar o valor monetário. */
+.saldo-grupo-valor { display: block; font-size: 1.45rem; line-height: 1.2; font-weight: 800; }
+@media (max-width: 420px) { .saldo-grupo-valor { font-size: 1.2rem; } }

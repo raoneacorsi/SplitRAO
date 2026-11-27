@@ -107,6 +107,10 @@
               </button>
 
               <div id="dropdown-3dots-home" class="dropdown-3dots hidden">
+                <button type="button" id="btn-editar-meu-nome" class="dropdown-item">
+                  <span>✏️</span>
+                  <span data-i18n="editMyNameBtn">Alterar meu nome</span>
+                </button>
                 <button type="button" id="btn-entrar-codigo-home" class="dropdown-item">
                   <span>🔑</span>
                   <span data-i18n="codeBtn">Código</span>
@@ -165,6 +169,8 @@
               </div>
             </div>
 
+            <div id="saldo-grupo-cabecalho" class="saldo-grupo-cabecalho hidden" aria-live="polite"></div>
+
             <!-- Menu de 3 tracinhos (Ações do Grupo) -->
             <div class="menu-3dots-wrap" id="menu-3dots-wrap">
               <button type="button" id="btn-menu-3dots" class="btn-3dots" aria-expanded="false" aria-label="Menu de opções" data-i18n-aria-label="optionsMenu" title="Opções" data-i18n-title="optionsLabel">
@@ -174,10 +180,6 @@
               </button>
 
               <div id="dropdown-3dots" class="dropdown-3dots hidden">
-                <button type="button" id="btn-editar-meu-nome" class="dropdown-item">
-                  <span>✏️</span>
-                  <span data-i18n="editMyNameBtn">Alterar meu nome</span>
-                </button>
                 <button type="button" id="menu-copiar-codigo" class="dropdown-item">
                   <span>📋</span>
                   <span id="menu-codigo-label"><span data-i18n="copyCodeMenuLabel">Copiar código</span> (<code id="menu-codigo-valor">---</code>)</span>
@@ -201,6 +203,8 @@
               <h3 data-i18n="sec1Title">Participantes do Grupo</h3>
             </div>
 
+            <div id="lista-pessoas" class="tags-container"></div>
+
             <div class="invite-primary-row">
               <button type="button" id="btn-compartilhar-grupo" class="btn-invite-link btn-invite-primary" data-i18n="inviteLinkBtn">🔗 + Adicionar / Enviar Link</button>
             </div>
@@ -214,7 +218,6 @@
               <button type="submit" class="btn-secondary" data-i18n="addPersonConfirmBtn">Adicionar</button>
             </form>
 
-            <div id="lista-pessoas" class="tags-container"></div>
           </div>
         </section>
 
@@ -302,19 +305,14 @@
                     <input type="date" id="input-data-gasto" class="hidden-date-input">
                   </div>
                 </div>
-                <input type="text" id="desc-gasto" data-i18n-placeholder="descPlaceholder" placeholder="Ex: Supermercado, Combustível, Jantar..." required>
-              </div>
-
-              <div class="form-group">
-                <div class="label-row">
-                  <label>
-                    <span data-i18n="categoryLabel">Categoria</span>
-                    <span class="label-optional" data-i18n="optionalTag">(opcional)</span>
-                    <span id="auto-cat-badge" class="auto-cat-badge hidden" data-i18n="autoDetectedTag">✨ Auto</span>
-                  </label>
-                  <button type="button" id="btn-limpar-categoria" class="btn-text hidden" data-i18n="clearSelectionBtn">Limpar seleção</button>
+                <div class="expense-category-wrap">
+                  <div class="expense-description-row">
+                    <input type="text" id="desc-gasto" data-i18n-placeholder="descPlaceholder" placeholder="Ex: Supermercado, Combustível, Jantar..." required>
+                    <button type="button" id="btn-categoria" class="expense-category-trigger" aria-expanded="false" aria-controls="category-selector" aria-label="Categoria"></button>
+                  </div>
+                  <div id="category-selector" class="category-grid expense-category-menu hidden"></div>
                 </div>
-                <div id="category-selector" class="category-grid"></div>
+                <span id="auto-cat-badge" class="auto-cat-badge hidden" data-i18n="autoDetectedTag">✨ Auto</span>
               </div>
 
               <div class="form-grid-2">
@@ -442,6 +440,26 @@
       <div class="modal-footer">
         <button type="button" id="btn-cancelar-sair-grupo" class="btn-secondary" data-i18n="cancelBtn">Cancelar</button>
         <button type="button" id="btn-confirmar-excluir-todos" class="btn-primary hidden" style="width: auto; margin-top: 0; background: var(--danger);" data-i18n="deleteEveryoneBtn">Excluir para todos</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de convite: compartilhamento nativo ou cópia do link -->
+  <div id="modal-convite" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="convite-titulo">
+    <div class="modal-box" style="max-width: 440px;">
+      <div class="modal-header">
+        <h2 id="convite-titulo" data-i18n="inviteModalTitle">Convidar participante</h2>
+        <button type="button" id="btn-fechar-convite" class="btn-close" data-i18n-aria-label="closeBtn">×</button>
+      </div>
+      <div class="modal-body convite-body">
+        <p data-i18n="inviteModalText">Compartilhe o link para convidar participantes ao grupo.</p>
+        <input id="convite-link" type="text" readonly data-i18n-aria-label="inviteCopyLink">
+        <button type="button" id="btn-share-convite" class="btn-primary" data-i18n="inviteShareLink">Compartilhar link</button>
+        <button type="button" id="btn-copy-convite" class="btn-secondary" data-i18n="inviteCopyLink">Copiar link</button>
+        <p id="convite-feedback" role="status" aria-live="polite"></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="btn-cancelar-convite" class="btn-secondary" data-i18n="cancelBtn">Cancelar</button>
       </div>
     </div>
   </div>
@@ -659,7 +677,7 @@
     <button type="button" id="btn-toast-undo" class="toast-undo-btn" data-i18n="undoBtn">Desfazer</button>
   </div>
 
-  <script type="module" src="app.js?v=18"></script>
+  <script type="module" src="app.js?v=22"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

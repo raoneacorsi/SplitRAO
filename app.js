@@ -47,12 +47,64 @@ const SPLITWISE_IMPORT_KEY = 'raodev_splitwise_pending_import';
 const DEFAULT_GROUP_ID = 'grp_padrao';
 
 const CATEGORIAS = [
-  { id: 'Casa', icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>' },
-  { id: 'Comida', icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>' },
-  { id: 'Carro', icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 16H9m10 0h3v-3.15a1 1 0 0 0-.84-.99L16 11l-2.7-3.6a1 1 0 0 0-.8-.4H5.24a2 2 0 0 0-1.8 1.1l-.8 1.63A6 6 0 0 0 2 12.42V16h2"/><circle cx="6.5" cy="16.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/></svg>' },
-  { id: 'Entretenimento', icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M12 12h.01"/><path d="M7 12h2"/><path d="M8 11v2"/><circle cx="15.5" cy="11" r="1"/><circle cx="18" cy="13" r="1"/></svg>' },
-  { id: 'Transporte', icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="16" rx="2"/><path d="M4 11h16"/><path d="M12 3v8"/><path d="m8 19-2 3"/><path d="m18 22-2-3"/><circle cx="8" cy="15" r="1"/><circle cx="16" cy="15" r="1"/></svg>' },
-  { id: 'Vida', icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>' }
+  {
+    "id": "Mercado",
+    "icon": "<svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M2 3h2l3 13h12l3-10H5\"/><circle cx=\"9\" cy=\"21\" r=\"1\"/><circle cx=\"18\" cy=\"21\" r=\"1\"/></svg>"
+  },
+  {
+    "id": "Comer fora",
+    "icon": "<svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 3v7a3 3 0 0 0 6 0V3M7 3v19M20 3c-5 3-5 10 0 10v9\"/></svg>"
+  },
+  {
+    "id": "Entretenimento",
+    "icon": "<svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"2\" y=\"6\" width=\"20\" height=\"12\" rx=\"4\"/><path d=\"M6 12h6m-3-3v6m7-3h.01m3 2h.01\"/></svg>"
+  },
+  {
+    "id": "Transporte",
+    "icon": "<svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"4\" y=\"3\" width=\"16\" height=\"16\" rx=\"3\"/><path d=\"M4 11h16M8 19v3m8-3v3M8 15h.01m8 0h.01\"/></svg>"
+  },
+  {
+    "id": "Saúde",
+    "icon": "<svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 21 3 12a5 5 0 0 1 9-5 5 5 0 0 1 9 5z\"/><path d=\"M4 12h5l2-4 3 8 2-4h4\"/></svg>"
+  },
+  {
+    "id": "Casa",
+    "icon": "<svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m3 10 9-8 9 8v11H3zM9 21v-8h6v8\"/></svg>"
+  },
+  {
+    "id": "Educação",
+    "icon": "<svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m2 9 10-5 10 5-10 5zM6 11v6l6 3 6-3v-6m4-2v8\"/></svg>"
+  },
+  {
+    "id": "Presentes",
+    "icon": "<svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"3\" y=\"8\" width=\"18\" height=\"4\" rx=\"1\"/><path d=\"M5 12v9h14v-9M12 8v13M12 8C2 8 6-1 12 8c6-9 10 0 0 0\"/></svg>"
+  },
+  {
+    "id": "Lazer",
+    "icon": "<svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m2 21 10-18 10 18zM8 21l4-8 4 8\"/></svg>"
+  },
+  {
+    "id": "Vestuário",
+    "icon": "<svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m8 3-6 4 3 5 3-2v11h8V10l3 2 3-5-6-4a4 4 0 0 1-8 0z\"/></svg>"
+  },
+  {
+    "id": "Seguros / Impostos",
+    "icon": "<svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m12 2 9 4v6c0 5-5 9-9 10-4-1-9-5-9-10V6zM8 12l3 3 5-6\"/></svg>"
+  },
+  {
+    "id": "Animais de estimação",
+    "icon": "<svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><ellipse cx=\"5\" cy=\"9\" rx=\"2\" ry=\"3\"/><ellipse cx=\"10\" cy=\"5\" rx=\"2\" ry=\"3\"/><ellipse cx=\"15\" cy=\"5\" rx=\"2\" ry=\"3\"/><ellipse cx=\"20\" cy=\"9\" rx=\"2\" ry=\"3\"/><path d=\"M6 18c0-3 4-7 6-7s6 4 6 7c0 5-4 2-6 2s-6 3-6-2z\"/></svg>"
+  },
+  {
+    "id": "Geral",
+    "icon": "<svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"3\"/><path d=\"M7 12h.01m5 0h.01m5 0h.01\"/></svg>"
+  }
+];
+// Categorias antigas preservadas para histórico e edição.
+const CATEGORIAS_LEGADAS = [
+{ id: 'Comida', icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>' },
+{ id: 'Carro', icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 16H9m10 0h3v-3.15a1 1 0 0 0-.84-.99L16 11l-2.7-3.6a1 1 0 0 0-.8-.4H5.24a2 2 0 0 0-1.8 1.1l-.8 1.63A6 6 0 0 0 2 12.42V16h2"/><circle cx="6.5" cy="16.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/></svg>' },
+{ id: 'Vida', icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>' }
 ];
 
 const MOEDAS = {
@@ -77,21 +129,17 @@ function detectarCategoriaAutomatica(descricao) {
   const texto = normalizarTexto(descricao);
   if (!texto || texto.length < 2) return null;
 
-  const palavrasTexto = texto.split(/[^a-z0-9]+/).filter(Boolean);
-
+  const frase = ' ' + texto.replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+  let melhor = null, tamanho = 0;
   for (const regra of REGRAS_AUTO_CATEGORIA) {
     for (const kw of regra.palavras) {
-      const kwNorm = normalizarTexto(kw);
-      if (kwNorm.includes(' ')) {
-        if (texto.includes(kwNorm)) return regra.categoria;
-      } else {
-        if (palavrasTexto.includes(kwNorm) || (kwNorm.length >= 4 && palavrasTexto.some(p => p.startsWith(kwNorm)))) {
-          return regra.categoria;
-        }
+      const termo = normalizarTexto(kw).replace(/[^a-z0-9]+/g, ' ').trim();
+      if (termo && termo.length > tamanho && frase.includes(' ' + termo + ' ')) {
+        melhor = regra.categoria; tamanho = termo.length;
       }
     }
   }
-  return null;
+  return melhor;
 }
 
 let currentLang = localStorage.getItem(LANG_STORAGE_KEY) || 'pt';
@@ -132,7 +180,50 @@ let dataGastoSelecionada = '';
 let undoPendente = null;
 
 // ==================== NAVEGAÇÃO ENTRE TELAS ====================
-function abrirTelaListaGrupos() {
+// Histórico real do navegador: uma entrada para a lista e outra para o grupo.
+const NAV_KEY = 'splitraoTela';
+function estadoNavegacao(tela, grupoId = null) {
+  return { ...history.state, [NAV_KEY]: tela, splitraoGrupo: grupoId };
+}
+function iniciarNavegacao() {
+  history.replaceState(estadoNavegacao('lista'), '', location.href);
+  window.addEventListener('popstate', e => {
+    if (e.state?.[NAV_KEY] === 'lista') {
+      // Se houver um modal no grupo, fecha pelo botão original (inclui limpeza de listeners).
+      if (telaAtiva === 'detalhe' && fecharModalPeloVoltar()) {
+        history.pushState(estadoNavegacao('detalhe', state.grupoAtivoId), '', location.href);
+        return;
+      }
+      abrirTelaListaGrupos(true);
+    } else if (e.state?.[NAV_KEY] === 'detalhe') {
+      const id = e.state.splitraoGrupo;
+      if (state.grupos[id]) {
+        assinarGrupoAtivo(id);
+        abrirTelaDetalheGrupo(id, true);
+      } else abrirTelaListaGrupos(true);
+    }
+  });
+}
+function fecharModalPeloVoltar() {
+  const botoes = {
+    'modal-form-gasto': 'btn-fechar-form-gasto',
+    'modal-escolher-grupo-gasto': 'btn-fechar-escolher-grupo',
+    'modal-novo-grupo': 'btn-fechar-novo-grupo',
+    'modal-sair-grupo': 'btn-fechar-sair-grupo',
+    'modal-convite': 'btn-fechar-convite',
+    'modal-global': 'btn-fechar-global',
+    'modal-quitar': 'btn-fechar-quitar',
+    'modal-relatorio': 'btn-fechar-modal'
+  };
+  const abertos = [...document.querySelectorAll('.modal-overlay:not(.hidden), .modal-gasto-overlay:not(.hidden)')].filter(el => el.getClientRects().length);
+  const modal = abertos.at(-1);
+  const botao = modal && document.getElementById(botoes[modal.id]);
+  if (!botao) return false;
+  botao.click();
+  return true;
+}
+function abrirTelaListaGrupos(viaHistorico = false) {
+  if (viaHistorico !== true && history.state?.[NAV_KEY] === 'detalhe') history.back();
   telaAtiva = 'lista';
   cancelarEdicao();
   setFormGastoVisivel(false);
@@ -144,9 +235,14 @@ function abrirTelaListaGrupos() {
   renderResumoGlobalUsuario();
 }
 
-function abrirTelaDetalheGrupo(groupId) {
+function abrirTelaDetalheGrupo(groupId, viaHistorico = false) {
   if (groupId && state.grupos[groupId]) {
     state.grupoAtivoId = groupId;
+  }
+  if (!viaHistorico) {
+    const novoEstado = estadoNavegacao('detalhe', state.grupoAtivoId);
+    if (history.state?.[NAV_KEY] === 'detalhe') history.replaceState(novoEstado, '', location.href);
+    else history.pushState(novoEstado, '', location.href);
   }
   telaAtiva = 'detalhe';
   setMenu3DotsHomeAberto(false);
@@ -368,7 +464,7 @@ function getValorEmBRL(gasto) {
 }
 
 function getCategoriaObj(catId) {
-  return CATEGORIAS.find(c => c.id === catId) || null;
+  return [...CATEGORIAS, ...CATEGORIAS_LEGADAS].find(c => c.id === (catId)) || null;
 }
 
 function escapeHTML(str) {
@@ -1046,6 +1142,7 @@ async function processarConviteDaURL() {
       await vincularGrupoAoUsuario(currentUser.uid, cleanId, true);
       salvarEstadoLocal();
       assinarGrupoAtivo(cleanId);
+      history.replaceState(estadoNavegacao('lista'), '', window.location.pathname);
       abrirTelaDetalheGrupo(cleanId);
     } else {
       alert(t('groupNotFoundAlert'));
@@ -1054,7 +1151,7 @@ async function processarConviteDaURL() {
     console.warn('Erro ao processar convite da URL:', e);
   } finally {
     const urlLimpa = window.location.origin + window.location.pathname;
-    window.history.replaceState({}, document.title, urlLimpa);
+    window.history.replaceState(history.state, document.title, urlLimpa);
   }
 }
 
@@ -1852,16 +1949,55 @@ async function excluirOuSairDoGrupo() {
   }
 }
 
-async function compartilharConviteGrupo() {
+// Abre o convite sem alertas do navegador; mantém o link original do grupo.
+function compartilharConviteGrupo() {
   const grupo = getGrupoAtivo();
-  const baseUrl = window.location.origin + window.location.pathname;
-  const link = `${baseUrl}?grupo=${encodeURIComponent(grupo.id)}`;
-  const msg = t('inviteMsg', { name: grupo.nome, link, id: grupo.id });
+  if (!grupo) return;
+  const link = `${window.location.origin}${window.location.pathname}?grupo=${encodeURIComponent(grupo.id)}`;
+  const modal = document.getElementById('modal-convite');
+  const campo = document.getElementById('convite-link');
+  const feedback = document.getElementById('convite-feedback');
+  const compartilhar = document.getElementById('btn-share-convite');
+  const copiar = document.getElementById('btn-copy-convite');
+  const focoAnterior = document.activeElement;
+  campo.value = link;
+  feedback.textContent = '';
+  compartilhar.classList.toggle('hidden', typeof navigator.share !== 'function');
+  modal.classList.remove('hidden');
+  copiar.focus();
 
-  try {
-    await navigator.clipboard.writeText(link);
-  } catch {}
-  alert(t('inviteCopiedAlert', { link }) + '\n\n' + msg);
+  const fechar = () => {
+    modal.classList.add('hidden');
+    modal.removeEventListener('click', clicar);
+    document.removeEventListener('keydown', teclado);
+    copiar.removeEventListener('click', copiarLink);
+    compartilhar.removeEventListener('click', enviarLink);
+    focoAnterior?.focus();
+  };
+  const clicar = e => {
+    if (e.target === modal || ['btn-fechar-convite', 'btn-cancelar-convite'].includes(e.target.id)) fechar();
+  };
+  const teclado = e => { if (e.key === 'Escape') { e.preventDefault(); fechar(); } };
+  const copiarLink = async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+      feedback.textContent = t('inviteCopySuccess');
+    } catch {
+      campo.focus(); campo.select();
+      feedback.textContent = t('inviteCopyManual');
+    }
+  };
+  const enviarLink = async () => {
+    try {
+      await navigator.share({ title: grupo.nome, text: t('inviteModalText'), url: link });
+    } catch (erro) {
+      if (erro.name !== 'AbortError') feedback.textContent = t('inviteShareError');
+    }
+  };
+  modal.addEventListener('click', clicar);
+  document.addEventListener('keydown', teclado);
+  copiar.addEventListener('click', copiarLink);
+  compartilhar.addEventListener('click', enviarLink);
 }
 
 async function entrarPorCodigoOuLink() {
@@ -2009,29 +2145,36 @@ function renderListaPessoas() {
 }
 
 // ==================== CATEGORIAS, DATA E MOEDA ====================
+function fecharMenuCategoria() {
+  document.getElementById('category-selector')?.classList.add('hidden');
+  document.getElementById('btn-categoria')?.setAttribute('aria-expanded', 'false');
+}
 function renderSeletorCategorias() {
   const grid = document.getElementById('category-selector');
-  if (!grid) return;
+  const trigger = document.getElementById('btn-categoria');
+  if (!grid || !trigger) return;
+  const atual = categoriaSelecionada || 'Geral';
+  const nome = getNomeCategoriaTraduzido(atual);
+  trigger.innerHTML = (getCategoriaObj(atual) || getCategoriaObj('Geral')).icon;
+  trigger.title = nome;
+  trigger.setAttribute('aria-label', t('categoryLabel') + ': ' + nome);
   grid.innerHTML = '';
-
   CATEGORIAS.forEach(cat => {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = categoriaSelecionada === cat.id ? 'cat-btn active' : 'cat-btn';
+    btn.className = atual === cat.id ? 'cat-btn active' : 'cat-btn';
+    btn.setAttribute('aria-pressed', String(atual === cat.id));
     btn.innerHTML = `${cat.icon}<span>${escapeHTML(getNomeCategoriaTraduzido(cat.id))}</span>`;
     btn.addEventListener('click', () => {
-      categoriaSelecionada = categoriaSelecionada === cat.id ? null : cat.id;
+      categoriaSelecionada = cat.id;
       categoriaDetectadaAuto = null;
       atualizarBadgeCategoriaAuto();
       renderSeletorCategorias();
+      fecharMenuCategoria();
+      trigger.focus();
     });
     grid.appendChild(btn);
   });
-
-  const btnLimpar = document.getElementById('btn-limpar-categoria');
-  if (btnLimpar) {
-    btnLimpar.classList.toggle('hidden', !categoriaSelecionada);
-  }
 }
 
 function atualizarBadgeCategoriaAuto() {
@@ -2397,6 +2540,7 @@ function construirDivisaoParaSalvar(totalBRL) {
 }
 
 function cancelarEdicao() {
+  fecharMenuCategoria();
   document.getElementById('edit-gasto-id').value = '';
   document.getElementById('form-gasto')?.reset();
   dataGastoSelecionada = getTodayISO();
@@ -2426,6 +2570,7 @@ function iniciarEdicaoGasto(gastoId) {
   dataGastoSelecionada = g.data || getTodayISO();
   atualizarLabelDataGasto();
 
+  fecharMenuCategoria();
   categoriaSelecionada = g.categoria || null;
   categoriaDetectadaAuto = null;
   atualizarBadgeCategoriaAuto();
@@ -2665,7 +2810,10 @@ function calcularBalancoGrupo(grupo) {
 
 function renderMeuSaldoDestaque(grupo, stats, transferencias) {
   const box = document.getElementById('meu-saldo-box');
-  if (!box) return;
+  const cabecalho = document.getElementById('saldo-grupo-cabecalho');
+  if (!box || !cabecalho) return;
+  cabecalho.classList.add('hidden');
+  cabecalho.textContent = '';
 
   if (!grupo.pessoas || grupo.pessoas.length === 0) {
     box.classList.add('hidden');
@@ -2696,6 +2844,16 @@ function renderMeuSaldoDestaque(grupo, stats, transferencias) {
     fraseResumoTopo = t('myBalanceReceiveTotal', { val: valorAbsFmt });
   }
 
+  cabecalho.className = `saldo-grupo-cabecalho ${classeSaldo}`;
+  // Destaca o valor sem alterar a frase traduzida ou os cálculos.
+  const partes = fraseResumoTopo.split(valorAbsFmt);
+  if (partes.length === 2) {
+    const valor = document.createElement('strong');
+    valor.className = 'saldo-grupo-valor';
+    valor.textContent = valorAbsFmt;
+    cabecalho.append(partes[0], valor, partes[1]);
+  } else cabecalho.textContent = fraseResumoTopo;
+
   const aReceber = transferencias.filter(tr => tr.para === meName);
   const aPagar = transferencias.filter(tr => tr.de === meName);
 
@@ -2720,12 +2878,10 @@ function renderMeuSaldoDestaque(grupo, stats, transferencias) {
   });
 
   box.innerHTML = `
-    <div class="meu-saldo-top">
-      <span class="meu-saldo-titulo ${classeSaldo}">${escapeHTML(fraseResumoTopo)}</span>
-    </div>
     ${linhasHTML ? `<div class="meu-saldo-detalhes">${linhasHTML}</div>` : ''}
   `;
 
+  box.classList.toggle('hidden', !linhasHTML);
   box.querySelectorAll('.btn-quitar-rapido').forEach(btn => {
     btn.addEventListener('click', () => {
       abrirModalQuitar(btn.dataset.quitarDe, btn.dataset.quitarPara, btn.dataset.quitarValor);
@@ -2742,6 +2898,7 @@ function renderSaldosEAcertos() {
 
   if (grupo.pessoas.length === 0) {
     document.getElementById('meu-saldo-box')?.classList.add('hidden');
+    document.getElementById('saldo-grupo-cabecalho')?.classList.add('hidden');
     lista.innerHTML = `<li class="empty-state-text" style="background:none;border:none;padding:4px 0;">${escapeHTML(t('registerParticipantsSaldos'))}</li>`;
     return;
   }
@@ -2790,16 +2947,6 @@ function renderFiltroCategorias() {
     opt.textContent = getNomeCategoriaTraduzido(cat.id);
     select.appendChild(opt);
   });
-
-  const optSemCat = document.createElement('option');
-  optSemCat.value = 'Sem categoria';
-  optSemCat.textContent = t('catNoCategory');
-  select.appendChild(optSemCat);
-
-  const optPag = document.createElement('option');
-  optPag.value = 'pagamentos';
-  optPag.textContent = t('filterOnlySettlements');
-  select.appendChild(optPag);
 
   if (Array.from(select.options).some(o => o.value === valorAnterior)) {
     select.value = valorAnterior;
@@ -3434,15 +3581,12 @@ function normalizarDataFlexivel(dataRaw) {
 }
 
 function mapearCategoriaSplitwise(catRaw) {
-  const txt = normalizarTexto(catRaw);
+  const txt = normalizarTexto(catRaw).replace(/[^a-z0-9]+/g, ' ').trim();
   if (!txt) return null;
-  if (txt.includes('rent') || txt.includes('aluguel') || txt.includes('home') || txt.includes('house') || txt.includes('utilit') || txt.includes('internet') || txt.includes('luz') || txt.includes('agua') || txt.includes('casa')) return 'Casa';
-  if (txt.includes('food') || txt.includes('grocer') || txt.includes('dining') || txt.includes('restaurant') || txt.includes('coffee') || txt.includes('liquor') || txt.includes('comida') || txt.includes('mercado') || txt.includes('bar')) return 'Comida';
-  if (txt.includes('gas') || txt.includes('fuel') || txt.includes('car') || txt.includes('park') || txt.includes('combust') || txt.includes('carro')) return 'Carro';
-  if (txt.includes('movie') || txt.includes('game') || txt.includes('music') || txt.includes('sport') || txt.includes('entertain') || txt.includes('lazer') || txt.includes('cinema')) return 'Entretenimento';
-  if (txt.includes('uber') || txt.includes('taxi') || txt.includes('bus') || txt.includes('train') || txt.includes('flight') || txt.includes('transport') || txt.includes('transporte')) return 'Transporte';
-  if (txt.includes('health') || txt.includes('medical') || txt.includes('doctor') || txt.includes('pharmacy') || txt.includes('vida') || txt.includes('saude')) return 'Vida';
-  return detectarCategoriaAutomatica(catRaw);
+  for (const regra of REGRAS_AUTO_CATEGORIA) {
+    if (normalizarTexto(regra.categoria) === txt || regra.palavras.some(p => normalizarTexto(p).replace(/[^a-z0-9]+/g, ' ').trim() === txt)) return regra.categoria;
+  }
+  return null;
 }
 
 function parseLinhaCSV(linha, separador) {
@@ -3564,7 +3708,7 @@ function converterSplitwiseCSVParaGrupo(csvText, nomeArquivo = 'Splitwise') {
       }
 
       const catRaw = idxCat >= 0 ? cols[idxCat] : '';
-      const categoria = mapearCategoriaSplitwise(catRaw) || detectarCategoriaAutomatica(desc);
+      const categoria = mapearCategoriaSplitwise(catRaw) || detectarCategoriaAutomatica(desc) || 'Geral';
 
       gastos.push({
         id: gerarId('gst'),
@@ -3676,7 +3820,7 @@ function converterSplitwiseJSONParaGrupos(parsed) {
         }
 
         const catNome = exp.category?.name || exp.category || '';
-        const categoria = mapearCategoriaSplitwise(catNome) || detectarCategoriaAutomatica(desc);
+        const categoria = mapearCategoriaSplitwise(catNome) || detectarCategoriaAutomatica(desc) || 'Geral';
 
         gastos.push({
           id: gerarId('gst'),
@@ -3933,7 +4077,7 @@ function renderResumoGlobalUsuario() {
     });
   } else {
     banner.classList.add('neutro', 'resumo-quitado');
-    fraseHTML = escapeHTML(t('myBalanceZero'));
+    fraseHTML = escapeHTML(t('myBalanceGlobalZero'));
   }
 
   banner.innerHTML = `
@@ -4152,11 +4296,18 @@ function initListeners() {
     }
   });
 
-  document.getElementById('btn-limpar-categoria')?.addEventListener('click', () => {
-    categoriaSelecionada = null;
-    categoriaDetectadaAuto = null;
-    atualizarBadgeCategoriaAuto();
-    renderSeletorCategorias();
+  document.getElementById('btn-categoria')?.addEventListener('click', () => {
+    const menu = document.getElementById('category-selector');
+    const aberto = menu.classList.toggle('hidden') === false;
+    document.getElementById('btn-categoria').setAttribute('aria-expanded', String(aberto));
+  });
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#category-selector, #btn-categoria')) fecharMenuCategoria();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !document.getElementById('category-selector')?.classList.contains('hidden')) {
+      fecharMenuCategoria(); document.getElementById('btn-categoria')?.focus();
+    }
   });
 
   document.getElementById('moeda-gasto')?.addEventListener('change', async (e) => {
@@ -4230,7 +4381,7 @@ function initListeners() {
       id: editId || gerarId('gst'),
       tipo: 'despesa',
       descricao: desc,
-      categoria: categoriaSelecionada || null,
+      categoria: categoriaSelecionada || 'Geral',
       data: dataGastoSelecionada || getTodayISO(),
       valor,
       moeda,
@@ -4257,7 +4408,7 @@ function initListeners() {
   });
 
   document.getElementById('btn-editar-meu-nome')?.addEventListener('click', async () => {
-    setMenu3DotsAberto(false);
+    setMenu3DotsHomeAberto(false);
     await atualizarMeuNomeEmTodosOsGrupos();
   });
 
@@ -4462,6 +4613,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ==================== BOOT ====================
 state = carregarEstadoLocal();
 dataGastoSelecionada = getTodayISO();
+iniciarNavegacao();
 initLanguageSwitcher();
 initAuthListeners();
 initListeners();
