@@ -115,7 +115,9 @@ const MOEDAS = {
   ARS: { code: 'ARS', symbol: 'ARS$', name: 'Peso Argentino' },
   EUR: { code: 'EUR', symbol: '€', name: 'Euro' },
   BOB: { code: 'BOB', symbol: 'Bs', name: 'Boliviano' },
-  PEN: { code: 'PEN', symbol: 'S/', name: 'Sol Peruano' }
+  GBP: {symbol:'£'}, UYU: {symbol:'UYU$'}, PYG: {symbol:'₲'}, AUD: {symbol:'A$'}, CAD: {symbol:'C$'}, MXN: {symbol:'MXN$'}, JPY: {symbol:'¥'}, CHF: {symbol:'CHF'}, COP: {symbol:'COP$'},
+  PEN: { code: 'PEN', symbol: 'S/', name: 'Sol Peruano' },
+  CNY:{symbol:'CN¥'}, RUB:{symbol:'₽'}, INR:{symbol:'₹'}, THB:{symbol:'฿'}, TRY:{symbol:'₺'}, KRW:{symbol:'₩'}, IDR:{symbol:'Rp'}, VND:{symbol:'₫'}, EGP:{symbol:'E£'}, ZAR:{symbol:'R'}, AED:{symbol:'AED'}, NZD:{symbol:'NZ$'}, SGD:{symbol:'S$'}, HKD:{symbol:'HK$'}, SEK:{symbol:'SEK'}, NOK:{symbol:'NOK'}, DKK:{symbol:'DKK'}, PLN:{symbol:'zł'}, HUF:{symbol:'Ft'}, CZK:{symbol:'Kč'}, ILS:{symbol:'₪'}, MAD:{symbol:'MAD'}
 };
 
 function normalizarTexto(str) {
@@ -241,7 +243,7 @@ function abrirTelaDetalheGrupo(groupId, viaHistorico = false) {
 function abrirFormularioDeNovoGasto() {
   cancelarEdicao();
   setFormGastoVisivel(true);
-  renderPagadorSelect();
+  renderPagadorSelect(true);
   renderAreaDivisao();
 }
 
@@ -393,10 +395,28 @@ function formatDateLabel(isoDate) {
   return formatDateBR(isoDate);
 }
 
-function formatMoney(valor, currencyCode = 'BRL') {
+// valorBRL é o campo legado: armazena o equivalente na referência fixa do grupo.
+function moedaBase(grupo = getGrupoAtivo()) { return MOEDAS[grupo?.moedaBase] ? grupo.moedaBase : 'BRL'; }
+// Moeda de referência fixa; fatores de exibição não alteram os lançamentos.
+function moedaReferencia(grupo) { return MOEDAS[grupo?.moedaReferencia] ? grupo.moedaReferencia : moedaBase(grupo); }
+function fatorMoeda(grupo, moeda = moedaBase(grupo)) {
+  if (moeda === moedaReferencia(grupo)) return 1;
+  const f = grupo?.fatoresMoeda?.[moeda];
+  return Number.isFinite(f) && f > 0 ? f : 1;
+}
+function assinaturaMonetaria(valor) {
+  if (Array.isArray(valor)) return '['+valor.map(assinaturaMonetaria).join(',')+']';
+  if (valor && typeof valor==='object') return '{'+Object.keys(valor).sort().map(k=>JSON.stringify(k)+':'+assinaturaMonetaria(valor[k])).join(',')+'}';
+  return JSON.stringify(valor);
+}
+function taxaExibida(gasto, grupo = getGrupoAtivo()) { return gasto.taxaCambio * fatorMoeda(grupo); }
+function divisaoExibida(gasto, grupo = getGrupoAtivo()) {
+  return Object.fromEntries(Object.entries(gasto.divisao || {}).map(([n,v])=>[n,v*fatorMoeda(grupo)]));
+}
+function formatMoney(valor, currencyCode = moedaBase()) {
   const num = Number(valor) || 0;
   const sinal = num < 0 ? '-' : '';
-  const abs = Math.abs(num).toLocaleString('pt-BR', {
+  const abs = Math.abs(num).toLocaleString({pt:'pt-BR',es:'es-AR',en:'en-US'}[currentLang], {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   });
@@ -405,22 +425,28 @@ function formatMoney(valor, currencyCode = 'BRL') {
 }
 
 function getTaxaCambioAtual(moeda) {
-  if (!moeda || moeda === 'BRL') return 1;
+  if (!moeda) return 1;
+  if (moeda === moedaBase()) {
+    const grupo = getGrupoAtivo();
+    const anterior = grupo.gastos.find(g=>g.id===document.getElementById('edit-gasto-id')?.value && g.moeda===moeda);
+    return anterior ? taxaExibida(anterior, grupo) : 1;
+  }
   const inputTaxa = parseFloat(document.getElementById('taxa-cambio')?.value);
   if (!isNaN(inputTaxa) && inputTaxa > 0) return inputTaxa;
   const g = getGrupoAtivo();
   const salva = g?.taxasCambio?.[moeda];
   if (typeof salva === 'number' && salva > 0) return salva;
-  return 1;
+  return 0;
 }
 
-function getValorEmBRL(gasto) {
+function getValorEmBRL(gasto, grupo = getGrupoAtivo()) {
+  const fator = fatorMoeda(grupo);
   if (typeof gasto.valorBRL === 'number' && !isNaN(gasto.valorBRL)) {
-    return gasto.valorBRL;
+    return gasto.valorBRL * fator;
   }
   const moeda = gasto.moeda || 'BRL';
   const taxa = typeof gasto.taxaCambio === 'number' && gasto.taxaCambio > 0 ? gasto.taxaCambio : 1;
-  return (Number(gasto.valor) || 0) * (moeda === 'BRL' ? 1 : taxa);
+  return (Number(gasto.valor) || 0) * (moeda === moedaReferencia(grupo) ? 1 : taxa) * fator;
 }
 
 function getCategoriaObj(catId) {
@@ -453,6 +479,7 @@ async function reservarNovoGrupo(grupo, uid = currentUser?.uid, participanteEsco
     const novo = { ...grupo, id, members: { [uid]: true }, vinculos: {} };
     const nome = participanteEscolhido || grupo.pessoas.find(p => normalizarTexto(p) === normalizarTexto(getNomeUsuarioEfetivo()));
     if (nome) novo.vinculos[uid] = nome;
+    novo.participantesSemApp = participantesSemVinculo(novo);
     if (!uid) throw new Error('Authentication required');
     const reservado = await runTransaction(db, async tx => {
       const ref = getGroupDocRef(id);
@@ -537,6 +564,7 @@ function criarGrupoPadrao(id = DEFAULT_GROUP_ID, nome = 'Grupo Principal') {
     participantesSemApp: [],
     meuParticipante: null,
     gastos: [],
+    moedaBase: 'BRL',
     taxasCambio: {}
   };
 }
@@ -626,11 +654,11 @@ function normalizarEstruturaGrupo(id, raw) {
       const de = resolverNomePessoa(partes.de);
       const para = resolverNomePessoa(partes.para);
 
-      const moeda = item.moeda || 'BRL';
+      const moeda = item.moeda || moedaReferencia(g);
       const taxaCambio = parseNumeroFlexivel(item.taxaCambio) > 0 ? parseNumeroFlexivel(item.taxaCambio) : 1;
       const valBruto = parseNumeroFlexivel(item.valor);
       const valBRLBruto = parseNumeroFlexivel(item.valorBRL);
-      const valorBRL = valBRLBruto > 0 ? valBRLBruto : (valBruto * (moeda === 'BRL' ? 1 : taxaCambio));
+      const valorBRL = valBRLBruto > 0 ? valBRLBruto : (valBruto * (moeda === moedaReferencia(g) ? 1 : taxaCambio));
       const valorOriginal = valBruto > 0 ? valBruto : valorBRL;
 
       return {
@@ -649,11 +677,11 @@ function normalizarEstruturaGrupo(id, raw) {
     }
 
     const pagador = item.pagadorNaoIdentificado ? null : resolverNomePessoa(item.pagador ?? item.quemPagou ?? item.de);
-    const moeda = item.moeda || 'BRL';
+    const moeda = item.moeda || moedaReferencia(g);
     const taxaCambio = parseNumeroFlexivel(item.taxaCambio) > 0 ? parseNumeroFlexivel(item.taxaCambio) : 1;
     const valBruto = parseNumeroFlexivel(item.valor);
     const valBRLBruto = parseNumeroFlexivel(item.valorBRL);
-    const valorBRL = valBRLBruto > 0 ? valBRLBruto : (valBruto * (moeda === 'BRL' ? 1 : taxaCambio));
+    const valorBRL = valBRLBruto > 0 ? valBRLBruto : (valBruto * (moeda === moedaReferencia(g) ? 1 : taxaCambio));
 
     const divisaoObj = {};
     if (item.divisao && typeof item.divisao === 'object') {
@@ -688,10 +716,13 @@ function normalizarEstruturaGrupo(id, raw) {
     order: typeof g.order === 'number' ? g.order : 0,
     image,
     pessoas,
-    participantesSemApp,
+    participantesSemApp: participantesSemVinculo({ ...g, pessoas, participantesSemApp }),
     meuParticipante,
     members: membrosReais(g),
     vinculos: { ...(g.vinculos || {}) },
+    moedaBase: moedaBase(g),
+    moedaReferencia: moedaReferencia(g),
+    fatoresMoeda: { ...(g.fatoresMoeda || {}) },
     gastos: gastosNormalizados,
     taxasCambio: g.taxasCambio && typeof g.taxasCambio === 'object' ? g.taxasCambio : {}
   };
@@ -868,8 +899,6 @@ async function ingressarGrupo(id, uid, escolha, nomeNovo) {
       if (!nome || Object.entries(vinculos).some(([u,p]) => u !== uid && normalizarTexto(p) === normalizarTexto(nome))) throw new Error('Participant unavailable');
       if (escolha) {
         if (!participantesDisponiveis(data, uid).includes(escolha)) throw new Error('Participant unavailable');
-        const legado = Object.keys(membros).some(u => u !== uid && !vinculos[u]);
-        if (legado && !(data.participantesSemApp || []).includes(escolha)) throw new Error('Legacy participant unavailable');
       }
       else { if (pessoas.some(p => normalizarTexto(p) === normalizarTexto(nome))) throw new Error('Duplicate participant'); pessoas.push(nome); }
       vinculos[uid] = nome;
@@ -883,6 +912,7 @@ async function ingressarGrupo(id, uid, escolha, nomeNovo) {
       renomearNomeEmGrupo(grupo, nome, nomeNovo);
       grupo.vinculos[uid] = nomeNovo;
     }
+    grupo.participantesSemApp = participantesSemVinculo(grupo);
     tx.update(ref, { pessoas: grupo.pessoas, vinculos: grupo.vinculos, participantesSemApp: grupo.participantesSemApp, gastos: grupo.gastos, meuParticipante: grupo.meuParticipante || null });
     tx.update(perfilRef, { groupIds: [...new Set([...(perfil.data().groupIds || []), id])], activeGroupId: id, updatedAt: Date.now() });
     return grupo;
@@ -909,8 +939,11 @@ async function salvarGrupoNaNuvem(grupo) {
       order: typeof grupo.order === 'number' ? grupo.order : 0,
       image: grupo.image || null,
       pessoas: grupo.pessoas || [],
-      participantesSemApp: grupo.participantesSemApp || [],
+      participantesSemApp: participantesSemVinculo(grupo),
       meuParticipante: grupo.meuParticipante || null,
+      moedaBase: moedaBase(grupo),
+      moedaReferencia: moedaReferencia(grupo),
+      fatoresMoeda: grupo.fatoresMoeda || {},
       gastos: grupo.gastos || [],
       taxasCambio: grupo.taxasCambio || {},
       updatedAt: Date.now(),
@@ -921,6 +954,7 @@ async function salvarGrupoNaNuvem(grupo) {
       if (!snap.exists() || snap.data().deleted || !membrosReais(snap.data())[currentUser.uid]) throw new Error('Group unavailable');
       const remoto = snap.data();
       if (JSON.stringify(remoto.vinculos || {}) !== JSON.stringify(grupo.vinculos || {})) throw new Error("Participant links changed; reload group");
+      if (moedaBase(remoto) !== moedaBase(grupo) || fatorMoeda(remoto) !== fatorMoeda(grupo) || moedaReferencia(remoto) !== moedaReferencia(grupo)) throw new Error("Group currency changed; reload group");
       tx.update(groupRef, payload);
     });
     cloudGroupsCache[grupo.id] = normalizarEstruturaGrupo(grupo.id, { ...payload, members: grupo.members, vinculos: grupo.vinculos });
@@ -1447,6 +1481,7 @@ function aplicarIdiomaNaInterface() {
     el.setAttribute('aria-label', t(el.dataset.i18nAriaLabel));
   });
 
+  for(const id of ['moeda-gasto','novo-grupo-moeda','quitar-moeda']) preencherMoedas(document.getElementById(id));
   atualizarTituloQuitar();
   atualizarBandeiraAtualUI();
 
@@ -1547,13 +1582,13 @@ function getTextoSaldoUsuarioNoGrupo(grupo) {
 
   if (meuSaldo > 0.01) {
     return {
-      texto: t('myBalanceReceiveTotal', { val: formatMoney(meuSaldo, 'BRL') }),
+      texto: t('myBalanceReceiveTotal', { val: formatMoney(meuSaldo, moedaBase(grupo)) }),
       classe: 'positivo'
     };
   }
   if (meuSaldo < -0.01) {
     return {
-      texto: t('myBalancePayTotal', { val: formatMoney(Math.abs(meuSaldo), 'BRL') }),
+      texto: t('myBalancePayTotal', { val: formatMoney(Math.abs(meuSaldo), moedaBase(grupo)) }),
       classe: 'negativo'
     };
   }
@@ -1590,100 +1625,91 @@ async function persistirOrdemGrupos(gruposOrdenados) {
   }
 }
 
+// Reordenação visual: os cartões abrem espaço sem alterar o estado durante o gesto.
 function anexarDragReordenacaoGrupo(itemEl, grupoId, listaEl) {
   const handle = itemEl.querySelector('.group-drag-handle');
   if (!handle) return;
+  let gesto = null;
+  let bloquearClick = false;
 
-  let arrastando = false;
-  let inicioY = 0;
-  let alvoAlvoId = null;
-  let inserirAntes = true;
-  let bloqueiaProximoClick = false;
-
-  const limparIndicadores = () => {
-    listaEl.querySelectorAll('.group-list-item').forEach(el => {
-      el.classList.remove('drag-over-top', 'drag-over-bottom', 'is-dragging');
-      el.style.transform = '';
-    });
-  };
-
-  const aoMover = (ev) => {
-    const deltaY = ev.clientY - inicioY;
-    if (!arrastando && Math.abs(deltaY) > 6) {
-      arrastando = true;
-      bloqueiaProximoClick = true;
+  function aoMover(ev) {
+    if (!gesto || ev.pointerId !== gesto.id) return;
+    if (!itemEl.isConnected) { finalizar(ev, false); return; }
+    const g = gesto;
+    const delta = ev.clientY - g.y + window.scrollY - g.scroll;
+    if (!g.ativo && Math.abs(delta) <= 6) return;
+    if (!g.ativo) {
+      g.ativo = true;
+      bloquearClick = true;
       itemEl.classList.add('is-dragging');
+      g.itens.forEach(el => { el.style.transition = el === itemEl ? 'none' : 'transform 180ms ease'; });
     }
-    if (!arrastando) return;
-
     ev.preventDefault();
-    itemEl.style.transform = `translateY(${deltaY}px) scale(1.015)`;
-
-    const irmaos = Array.from(listaEl.querySelectorAll('.group-list-item')).filter(el => el !== itemEl);
-    alvoAlvoId = null;
-
-    for (const outro of irmaos) {
-      outro.classList.remove('drag-over-top', 'drag-over-bottom');
-      const rect = outro.getBoundingClientRect();
-      const meioY = rect.top + rect.height / 2;
-
-      if (ev.clientY >= rect.top && ev.clientY <= rect.bottom) {
-        alvoAlvoId = outro.dataset.groupId;
-        inserirAntes = ev.clientY < meioY;
-        outro.classList.add(inserirAntes ? 'drag-over-top' : 'drag-over-bottom');
-      }
+    const centro = g.top.get(itemEl) + delta + g.altura.get(itemEl) / 2;
+    // Posições naturais, sem depender dos retângulos em animação.
+    const outros = g.itens.filter(el => el !== itemEl);
+    let destino = 0;
+    for (const el of outros) {
+      if (centro > g.top.get(el) + g.altura.get(el) / 2) destino++;
     }
-  };
+    g.ordem = [...outros];
+    g.ordem.splice(destino, 0, itemEl);
+    let y = g.top.get(g.itens[0]);
+    for (const el of g.ordem) {
+      el.style.transform = el === itemEl
+        ? `translateY(${delta}px) scale(1.015)`
+        : `translateY(${y - g.top.get(el)}px)`;
+      y += g.altura.get(el) + g.gap;
+    }
+  }
 
-  const aoSoltar = async () => {
+  async function finalizar(ev, confirmar) {
+    if (!gesto || ev.pointerId !== gesto.id) return;
+    const g = gesto;
+    gesto = null;
     window.removeEventListener('pointermove', aoMover);
     window.removeEventListener('pointerup', aoSoltar);
-    window.removeEventListener('pointercancel', aoSoltar);
-
-    if (!arrastando) {
-      limparIndicadores();
-      return;
-    }
-
-    const ordenados = getGruposOrdenados();
-    const idxOrigem = ordenados.findIndex(g => g.id === grupoId);
-
-    limparIndicadores();
-
-    if (idxOrigem >= 0 && alvoAlvoId && alvoAlvoId !== grupoId) {
-      const [removido] = ordenados.splice(idxOrigem, 1);
-      let idxDestino = ordenados.findIndex(g => g.id === alvoAlvoId);
-      if (idxDestino >= 0) {
-        if (!inserirAntes) idxDestino += 1;
-        ordenados.splice(idxDestino, 0, removido);
-        renderSeletorGrupos();
-        await persistirOrdemGrupos(ordenados);
-      }
-    } else {
+    window.removeEventListener('pointercancel', aoCancelar);
+    handle.removeEventListener('lostpointercapture', aoCancelar);
+    if (handle.hasPointerCapture(ev.pointerId)) handle.releasePointerCapture(ev.pointerId);
+    g.itens.forEach(el => {
+      el.classList.remove('is-dragging');
+      el.style.transform = '';
+      el.style.transition = '';
+    });
+    if (g.ativo) {
+      setTimeout(() => { bloquearClick = false; }, 100);
+      if (!confirmar || !itemEl.isConnected || g.ordem.every((el, i) => el === g.itens[i])) return;
+      const atuais = getGruposOrdenados();
+      const ids = g.ordem.map(el => el.dataset.groupId);
+      if (atuais.length !== ids.length || atuais.some(el => !ids.includes(el.id))) return;
+      const ordenados = ids.map(id => state.grupos[id]);
+      // A função atualiza a ordem local antes da primeira operação assíncrona.
+      const salvamento = persistirOrdemGrupos(ordenados);
       renderSeletorGrupos();
+      await salvamento;
     }
+  }
+  const aoSoltar = ev => finalizar(ev, true);
+  const aoCancelar = ev => finalizar(ev, false);
 
-    arrastando = false;
-    alvoAlvoId = null;
-    setTimeout(() => {
-      bloqueiaProximoClick = false;
-    }, 50);
-  };
-
-  handle.addEventListener('pointerdown', (ev) => {
-    if (ev.button !== undefined && ev.button !== 0) return;
+  handle.addEventListener('pointerdown', ev => {
+    if (gesto || ev.isPrimary === false || ev.button !== 0) return;
     ev.stopPropagation();
     ev.preventDefault();
-    inicioY = ev.clientY;
-    arrastando = false;
-
+    const itens = Array.from(listaEl.querySelectorAll('.group-list-item'));
+    const top = new Map(itens.map(el => [el, el.offsetTop]));
+    const altura = new Map(itens.map(el => [el, el.offsetHeight]));
+    const gap = parseFloat(getComputedStyle(listaEl).rowGap) || 0;
+    gesto = { id: ev.pointerId, y: ev.clientY, scroll: window.scrollY, itens, top, altura, gap, ordem: itens, ativo: false };
+    handle.setPointerCapture(ev.pointerId);
     window.addEventListener('pointermove', aoMover, { passive: false });
     window.addEventListener('pointerup', aoSoltar);
-    window.addEventListener('pointercancel', aoSoltar);
+    window.addEventListener('pointercancel', aoCancelar);
+    handle.addEventListener('lostpointercapture', aoCancelar);
   });
-
-  itemEl.addEventListener('click', (ev) => {
-    if (bloqueiaProximoClick) {
+  itemEl.addEventListener('click', ev => {
+    if (bloquearClick || ev.target.closest('.group-drag-handle')) {
       ev.preventDefault();
       ev.stopPropagation();
     }
@@ -1781,10 +1807,74 @@ async function trocarGrupoAtivo(novoId, { abrirDetalhe = false } = {}) {
 }
 
 // Solicita um nome usando o mesmo padrão visual dos demais modais.
+// Conversão explícita de uma cópia importada; mantém valores originais.
+function converterBaseImportada(grupo, destino, taxa) {
+  if (destino===moedaBase(grupo)) return;
+  if (!(taxa>0 && Number.isFinite(taxa))) throw new Error('Invalid rate');
+  grupo.moedaReferencia = moedaReferencia(grupo);
+  grupo.fatoresMoeda = { ...(grupo.fatoresMoeda || {}), [destino]: destino===moedaReferencia(grupo)?1:(grupo.fatoresMoeda?.[destino] || fatorMoeda(grupo)*taxa) };
+  grupo.moedaBase=destino; grupo.taxasCambio={};
+}
+// Lista única de moedas, com nomes localizados pelo navegador.
+function preencherMoedas(select) {
+  if (!select) return;
+  const anterior = select.value;
+  const nomes = new Intl.DisplayNames([currentLang], {type:'currency'});
+  const principais = ['BRL','USD','EUR','ARS','CLP','UYU','PYG','BOB','PEN'];
+  const outras = Object.keys(MOEDAS).filter(c=>!principais.includes(c)).sort((a,b)=>nomes.of(a).localeCompare(nomes.of(b),currentLang));
+  select.replaceChildren();
+  for (const code of [...principais,...outras]) {
+    const compacto = select.id === 'moeda-gasto';
+    select.add(new Option(compacto ? code : `${code} — ${nomes.of(code)} (${MOEDAS[code].symbol})`, code));
+  }
+  select.value = MOEDAS[anterior] ? anterior : 'BRL';
+}
+// Busca local: não consulta a rede nem altera a moeda até a seleção.
+function adicionarBuscaMoeda(select) {
+  if (!select || select.dataset.buscaMoeda) return;
+  select.dataset.buscaMoeda='1';
+  const busca=document.createElement('input'); busca.type='text'; busca.inputMode='search'; busca.autocomplete='off';
+  busca.dataset.i18nPlaceholder='currencySearch'; busca.dataset.i18nAriaLabel='currencySearch';
+  busca.placeholder=t('currencySearch'); busca.setAttribute('aria-label',t('currencySearch'));
+  busca.style.cssText='width:100%;min-width:0;margin-bottom:8px';
+  busca.addEventListener('keydown', e=>{if(e.key==='Enter') e.preventDefault();});
+  select.before(busca);
+  busca.addEventListener('input',()=>{
+    const q=normalizarTexto(busca.value);
+    for(const opt of select.options) opt.hidden=opt.value!==select.value && !normalizarTexto(opt.text).includes(q);
+  });
+  select.addEventListener('change',()=>{busca.value='';for(const opt of select.options)opt.hidden=false;});
+}
+// Duas casas quando a perda relativa é pequena; mais precisão para taxas baixas.
+function formatarCotacaoSugerida(rate) {
+  if (!Number.isFinite(rate)||rate<=0) return '';
+  for(let d=2;d<=15;d++) {
+    const texto=rate.toFixed(d), n=Number(texto);
+    if(n>0 && (d===2 && rate>=1 || Math.abs(n-rate)/rate<=0.001)) return texto;
+  }
+  return String(rate);
+}
+async function consultarCotacao(origem,destino) {
+  const res=await fetch(`https://open.er-api.com/v6/latest/${encodeURIComponent(origem)}`);
+  if(!res.ok)throw new Error('FX unavailable');
+  const rate=(await res.json())?.rates?.[destino];
+  if(!Number.isFinite(rate)||rate<=0)throw new Error('Invalid FX rate');
+  return rate;
+}
+
 function solicitarNomeNovoGrupo({ perfil = false, renomear = false, nomeAtual = "" } = {}) {
   const modal = document.getElementById('modal-novo-grupo');
   const form = document.getElementById('form-novo-grupo');
   const input = document.getElementById('novo-grupo-nome');
+  const campoMoeda = document.getElementById('novo-grupo-moeda-campo');
+  campoMoeda.classList.toggle('hidden', perfil || renomear);
+  const seletorMoeda = document.getElementById('novo-grupo-moeda');
+  seletorMoeda.value = 'BRL';
+  const buscaMoeda = seletorMoeda.previousElementSibling;
+  if (buscaMoeda?.dataset.i18nPlaceholder === 'currencySearch') {
+    buscaMoeda.value = '';
+    for (const opt of seletorMoeda.options) opt.hidden = false;
+  }
   const focoAnterior = document.activeElement;
   document.getElementById('novo-grupo-titulo').textContent = t(renomear ? 'renameGroupTitle' : perfil ? 'nameLabel' : 'newGroupFull');
   document.getElementById('novo-grupo-label').textContent = t(renomear ? 'renameGroupPrompt' : perfil ? 'askMyNamePrompt' : 'newGroupPrompt');
@@ -1803,7 +1893,7 @@ function solicitarNomeNovoGrupo({ perfil = false, renomear = false, nomeAtual = 
     };
     const enviar = e => {
       e.preventDefault();
-      if (input.value.trim()) fechar(input.value.trim());
+      if (input.value.trim()) fechar(perfil || renomear ? input.value.trim() : {nome:input.value.trim(), moeda:seletorMoeda.value});
     };
     const clicar = e => {
       if (e.target === modal || ['btn-fechar-novo-grupo', 'btn-cancelar-novo-grupo'].includes(e.target.id)) fechar(null);
@@ -1818,9 +1908,11 @@ function solicitarNomeNovoGrupo({ perfil = false, renomear = false, nomeAtual = 
 }
 
 async function criarNovoGrupo() {
-  const nome = await solicitarNomeNovoGrupo();
-  if (!nome || !nome.trim()) return;
-  let novoGrupo = criarGrupoPadrao('', nome.trim());
+  const escolha = await solicitarNomeNovoGrupo();
+  if (!escolha) return;
+  let novoGrupo = criarGrupoPadrao('', escolha.nome);
+  novoGrupo.moedaBase = escolha.moeda;
+  novoGrupo.moedaReferencia = escolha.moeda;
   novoGrupo.order = getGruposOrdenados().length;
 
   let nomeUsuario = getNomeUsuarioEfetivo();
@@ -2033,17 +2125,19 @@ function modalSelecao(titulo, montar) {
   const modal = document.getElementById('modal-v26'), corpo = document.getElementById('v26-corpo');
   document.getElementById('v26-titulo').textContent = titulo;
   corpo.replaceChildren();
+  const confirmar = document.getElementById('v26-confirmar');
+  confirmar.onclick = null;
   modal.classList.remove('hidden');
   return new Promise(resolve => {
     const fechar = valor => { modal.classList.add('hidden'); modal.onclick = null; document.removeEventListener('keydown', tecla); resolve(valor); };
     const tecla = e => { if (e.key === 'Escape') fechar(null); };
-    modal.onclick = e => { if (e.target === modal || e.target.closest('#v26-cancelar')) fechar(null); };
+    modal.onclick = e => { if (e.target === modal || e.target.closest('#v26-cancelar, #v26-fechar')) fechar(null); };
     document.addEventListener('keydown', tecla);
     montar(corpo, fechar);
   });
 }
 function botaoV26(corpo, texto, acao) {
-  const b = document.createElement('button'); b.type = 'button'; b.className = 'btn-primary'; b.textContent = texto; b.onclick = acao; corpo.append(b);
+  const b = document.getElementById('v26-confirmar'); b.textContent = texto; b.onclick = acao;
 }
 async function criarConviteMultiplo() {
   if (!currentUser) return;
@@ -2063,12 +2157,20 @@ async function criarConviteMultiplo() {
     compartilharConviteGrupo(`${location.origin}${location.pathname}?convite=${codigo}`);
   } catch (e) { console.error(e); alert(t(e.code === 'permission-denied' ? 'multiPermissionError' : 'multiError')); }
 }
-// Exclui nomes vinculados e protege participantes legados sem UID identificado.
+// Identifica nomes livres; em grupos legados, preserva identidades incertas.
+function participantesSemVinculo(data, uid = null) {
+  const vinculos = data.vinculos || {};
+  const pessoas = data.pessoas || [];
+  const ocupados = new Set(Object.values(vinculos).map(normalizarTexto));
+  const legados = Object.keys(membrosReais(data)).some(u => u !== uid &&
+    !pessoas.includes(vinculos[u]));
+  const marcados = new Set((data.participantesSemApp || []).map(normalizarTexto));
+  return pessoas.filter(nome => !ocupados.has(normalizarTexto(nome)) &&
+    (!legados || marcados.has(normalizarTexto(nome))));
+}
+
 function participantesDisponiveis(data, uid) {
-  const ocupados = new Set(Object.entries(data.vinculos || {}).filter(([u]) => u !== uid).map(([,nome]) => normalizarTexto(nome)));
-  const legados = Object.keys(membrosReais(data)).some(u => u !== uid && !data.vinculos?.[u]);
-  return (data.pessoas || []).filter(nome => !ocupados.has(normalizarTexto(nome)) &&
-    (!legados || (data.participantesSemApp || []).includes(nome)));
+  return participantesSemVinculo(data, uid);
 }
 
 // Campos compartilhados entre ingresso por convite e importação.
@@ -2093,8 +2195,14 @@ function camposParticipante(corpo, nomes) {
   select.onchange=atualizar; atualizar();
   const label = document.createElement('label'); label.textContent=t('multiName');
   const instrucao = document.createElement('label'); instrucao.textContent = t('chooseExistingParticipant');
-  select.size = Math.min(nomes.length + (nomes.length ? 2 : 1), 6);
-  corpo.append(instrucao,select,label,input);
+  // Controles no padrão dos formulários do aplicativo.
+  const campoSelecao = document.createElement('div'), campoNome = document.createElement('div');
+  campoSelecao.className = campoNome.className = 'form-group';
+  campoSelecao.style.marginBottom = campoNome.style.marginBottom = '0';
+  instrucao.append(select); label.append(input);
+  select.style.marginTop = input.style.marginTop = '6px';
+  campoSelecao.append(instrucao); campoNome.append(label);
+  corpo.append(campoSelecao, campoNome);
   return {select,input};
 }
 
@@ -2103,16 +2211,22 @@ async function selecionarParticipantesImportacao(grupos) {
   return modalSelecao(t('importParticipantTitle'), (corpo, fechar) => {
     const campos = grupos.map(grupo => {
       const titulo = document.createElement('h3'); titulo.textContent = grupo.nome; corpo.append(titulo);
-      return {grupo, ...camposParticipante(corpo, grupo.pessoas)};
+      const moeda = document.createElement('select'); preencherMoedas(moeda); moeda.value=moedaBase(grupo);
+      const taxa = document.createElement('input'); taxa.type='number'; taxa.step='any'; taxa.min='0'; taxa.value='1';
+      const label = document.createElement('label'); label.textContent=t('baseCurrency'); label.append(moeda); corpo.append(label);
+      const labelTaxa=document.createElement('label'); labelTaxa.append(taxa); corpo.append(labelTaxa);
+      const atualizar=()=>{labelTaxa.hidden=moeda.value===moedaBase(grupo); labelTaxa.firstChild===taxa && labelTaxa.prepend(document.createTextNode('')); labelTaxa.firstChild.textContent=`1 ${moedaBase(grupo)} = ${moeda.value} `; taxa.value=labelTaxa.hidden?'1':'';}; moeda.onchange=atualizar; atualizar();
+      return {grupo, moeda, taxa, ...camposParticipante(corpo, grupo.pessoas)};
     });
     botaoV26(corpo, t('importParticipantConfirm'), () => {
-      for (const {grupo,select,input} of campos) {
+      for (const {grupo,select,input,moeda,taxa} of campos) {
+        if (moeda.value!==moedaBase(grupo) && !(Number(taxa.value)>0 && Number.isFinite(Number(taxa.value)))) {alert(t("baseRateRequired"));return;}
         const nome = input.value.trim();
         if (select.value === '__selecionar__' || !nome || grupo.pessoas.some(p => p !== select.value && normalizarTexto(p) === normalizarTexto(nome))) {
           alert(t('importParticipantDuplicate')); return;
         }
       }
-      fechar(campos.map(({select,input}) => ({escolha:select.value,nome:input.value.trim()})));
+      fechar(campos.map(({select,input,moeda,taxa}) => ({escolha:select.value,nome:input.value.trim(),moeda:moeda.value,taxa:Number(taxa.value)})));
     });
   });
 }
@@ -2168,7 +2282,7 @@ async function editarMeuNomeV26() {
   const grupo = getGrupoAtivo();
   const atual = getMeParticipantName(grupo);
   if (!atual) { try { await abrirConvites(new URLSearchParams({grupo:grupo.id})); } catch(e) { console.error(e); alert(t('multiError')); } return; }
-  const nome = await modalSelecao(t('groupMyName'), (corpo,fechar) => { const input=document.createElement('input'); input.value=atual; input.style.width='100%'; corpo.append(input); botaoV26(corpo,t('saveGroupName'),()=>{if(input.value.trim()) fechar(input.value.trim());}); });
+  const nome = await modalSelecao(t('groupMyName'), (corpo,fechar) => { const input=document.createElement('input'); input.type='text'; input.value=atual; input.style.width='100%'; input.style.marginTop='6px'; const campo=document.createElement('div'); campo.className='form-group'; campo.style.marginBottom='0'; const label=document.createElement('label'); label.textContent=t('multiName'); label.append(input); campo.append(label); corpo.append(campo); botaoV26(corpo,t('saveGroupName'),()=>{if(input.value.trim()) fechar(input.value.trim());}); });
   if (!nome) return;
   try { state.grupos[grupo.id] = await renomearMeuNomeV26(grupo.id,nome); renderTudo(); } catch(e) { console.error(e); alert(t('multiError')); }
 }
@@ -2239,7 +2353,7 @@ function renderListaPessoas() {
   container.innerHTML = '';
 
   const meName = getMeParticipantName(grupo);
-  const semAppSet = new Set(grupo.participantesSemApp || []);
+  const semAppSet = new Set(participantesSemVinculo(grupo));
 
   if (grupo.pessoas.length === 0) {
     container.innerHTML = `<span class="empty-state-text">${escapeHTML(t('noParticipantsGroup'))}</span>`;
@@ -2329,19 +2443,20 @@ function atualizarLabelDataGasto() {
 }
 
 function atualizarSeletorMoedaUI() {
-  const moeda = document.getElementById('moeda-gasto')?.value || 'BRL';
+  const moeda = document.getElementById('moeda-gasto')?.value || moedaBase();
   const boxCambio = document.getElementById('box-cambio');
   const currCodeEl = document.getElementById('exchange-curr-code');
   const titleEl = document.getElementById('exchange-rate-label');
 
-  if (moeda === 'BRL') {
+  if (moeda === moedaBase()) {
     boxCambio?.classList.add('hidden');
     return;
   }
 
   boxCambio?.classList.remove('hidden');
   if (currCodeEl) currCodeEl.textContent = moeda;
-  if (titleEl) titleEl.textContent = t('exchangeTitle', { curr: moeda });
+  document.getElementById('exchange-base-code').textContent = moedaBase();
+  if (titleEl) titleEl.textContent = t('exchangeTitle', { curr: moeda, base: moedaBase() });
 
   const inputTaxa = document.getElementById('taxa-cambio');
   const grupo = getGrupoAtivo();
@@ -2355,38 +2470,37 @@ function atualizarSeletorMoedaUI() {
 }
 
 function atualizarConversaoCambioUI() {
-  const moeda = document.getElementById('moeda-gasto')?.value || 'BRL';
-  if (moeda === 'BRL') return;
+  const moeda = document.getElementById('moeda-gasto')?.value || moedaBase();
+  if (moeda === moedaBase()) return;
   const valor = parseFloat(document.getElementById('valor-gasto')?.value) || 0;
   const taxa = getTaxaCambioAtual(moeda);
   const convertido = valor * taxa;
   const el = document.getElementById('valor-convertido-brl');
-  if (el) el.textContent = formatMoney(convertido, 'BRL');
+  if (el) el.textContent = formatMoney(convertido, moedaBase());
 }
 
 async function buscarCotacaoMoeda(moeda) {
-  if (!moeda || moeda === 'BRL') return;
+  if (!moeda || moeda === moedaBase()) return;
   const statusEl = document.getElementById('cambio-status-msg');
   const inputTaxa = document.getElementById('taxa-cambio');
   if (statusEl) statusEl.textContent = t('fetchingRateMsg');
 
+  const grupo = getGrupoAtivo(), base = moedaBase(grupo);
   try {
     const res = await fetch(`https://open.er-api.com/v6/latest/${encodeURIComponent(moeda)}`);
     if (!res.ok) throw new Error('Falha na API de câmbio');
     const data = await res.json();
-    const rate = data?.rates?.BRL;
+    const rate = data?.rates?.[base];
     if (typeof rate !== 'number' || rate <= 0) throw new Error('Cotação BRL ausente');
 
-    const rounded = Number(rate.toFixed(6));
+    if (getGrupoAtivo().id !== grupo.id || moedaBase() !== base || document.getElementById("moeda-gasto").value !== moeda) return;
+    const rounded = rate;
     if (inputTaxa) inputTaxa.value = rounded;
 
-    const grupo = getGrupoAtivo();
     grupo.taxasCambio = grupo.taxasCambio || {};
     grupo.taxasCambio[moeda] = rounded;
-    await salvarGrupoNaNuvem(grupo);
-
     atualizarConversaoCambioUI();
-    if (statusEl) statusEl.textContent = t('rateFetchedMsg', { curr: moeda });
+    if (statusEl) statusEl.textContent = t('rateFetchedMsg', { curr: moeda, base: moedaBase() });
   } catch {
     if (statusEl) statusEl.textContent = t('rateErrorMsg');
   }
@@ -2404,7 +2518,7 @@ function setFormGastoVisivel(visivel) {
   }
 }
 
-function renderPagadorSelect() {
+function renderPagadorSelect(preferirEu = false) {
   const grupo = getGrupoAtivo();
   const select = document.getElementById('pagador-gasto');
   if (!select) return;
@@ -2435,7 +2549,9 @@ function renderPagadorSelect() {
     select.prepend(opt);
     if (valorAnterior === '__splitrao_unknown__') { select.value = valorAnterior; return; }
   }
-  if (valorAnterior && grupo.pessoas.includes(valorAnterior)) {
+  if (preferirEu && !editId && meName && grupo.pessoas.includes(meName)) {
+    select.value = meName;
+  } else if (valorAnterior && grupo.pessoas.includes(valorAnterior)) {
     select.value = valorAnterior;
   } else if (meName && grupo.pessoas.includes(meName)) {
     select.value = meName;
@@ -2508,12 +2624,12 @@ function renderAreaDivisao(valoresPredefinidos = null) {
       grp.className = 'custom-split-input-group';
 
       const prefix = document.createElement('span');
-      prefix.textContent = modoDivisaoAtual === 'exato' ? 'R$' : '×';
+      prefix.textContent = modoDivisaoAtual === 'exato' ? MOEDAS[moedaBase()].symbol : '×';
 
       const inp = document.createElement('input');
       inp.type = 'number';
       inp.min = '0';
-      inp.step = modoDivisaoAtual === 'exato' ? '0.01' : '1';
+      inp.step = modoDivisaoAtual === 'exato' ? 'any' : '1';
       inp.dataset.pessoaCustom = p;
       inp.placeholder = modoDivisaoAtual === 'exato' ? '0,00' : '0';
       if (valoresAtuais[p] !== undefined && valoresAtuais[p] > 0) {
@@ -2537,9 +2653,9 @@ function renderAreaDivisao(valoresPredefinidos = null) {
 
 function getValorTotalInformadoEmBRL() {
   const valor = parseFloat(document.getElementById('valor-gasto')?.value) || 0;
-  const moeda = document.getElementById('moeda-gasto')?.value || 'BRL';
+  const moeda = document.getElementById('moeda-gasto')?.value || moedaBase();
   const taxa = getTaxaCambioAtual(moeda);
-  return valor * (moeda === 'BRL' ? 1 : taxa);
+  return valor * taxa;
 }
 
 function atualizarFeedbackDivisao() {
@@ -2566,7 +2682,7 @@ function atualizarFeedbackDivisao() {
     const cada = totalBRL / selecionados.length;
     feedback.classList.add('ok');
     feedback.textContent = t('perPersonFeedback', {
-      val: formatMoney(cada, 'BRL'),
+      val: formatMoney(cada, moedaBase()),
       n: selecionados.length
     });
     return;
@@ -2582,24 +2698,24 @@ function atualizarFeedbackDivisao() {
 
     if (alvo <= 0) {
       feedback.classList.add('warn');
-      feedback.textContent = t('typedSumFeedback', { val: formatMoney(soma, 'BRL') });
+      feedback.textContent = t('typedSumFeedback', { val: formatMoney(soma, moedaBase()) });
       return;
     }
 
     const diff = Math.round((alvo - soma) * 100) / 100;
     if (Math.abs(diff) < 0.01) {
       feedback.classList.add('ok');
-      feedback.textContent = t('exactMatchFeedback', { val: formatMoney(alvo, 'BRL') });
+      feedback.textContent = t('exactMatchFeedback', { val: formatMoney(alvo, moedaBase()) });
     } else if (diff > 0) {
       feedback.classList.add('warn');
       feedback.textContent = t('missingAmountFeedback', {
-        diff: formatMoney(diff, 'BRL'),
-        sum: formatMoney(soma, 'BRL')
+        diff: formatMoney(diff, moedaBase()),
+        sum: formatMoney(soma, moedaBase())
       });
     } else {
       feedback.classList.add('err');
       feedback.textContent = t('exceededAmountFeedback', {
-        diff: formatMoney(Math.abs(diff), 'BRL')
+        diff: formatMoney(Math.abs(diff), moedaBase())
       });
     }
     return;
@@ -2621,7 +2737,7 @@ function atualizarFeedbackDivisao() {
       feedback.classList.add('ok');
       feedback.textContent = t('sharesRateFeedback', {
         n: totalCotas,
-        val: formatMoney(totalBRL / totalCotas, 'BRL')
+        val: formatMoney(totalBRL / totalCotas, moedaBase())
       });
     } else {
       feedback.classList.add('warn');
@@ -2660,7 +2776,7 @@ function construirDivisaoParaSalvar(totalBRL) {
     soma = Math.round(soma * 100) / 100;
     const alvo = Math.round(totalBRL * 100) / 100;
     if (Math.abs(alvo - soma) > 0.02) {
-      alert(`${t('missingAmountFeedback', { diff: formatMoney(Math.abs(alvo - soma), 'BRL'), sum: formatMoney(soma, 'BRL') })}`);
+      alert(`${t('missingAmountFeedback', { diff: formatMoney(Math.abs(alvo - soma), moedaBase()), sum: formatMoney(soma, moedaBase()) })}`);
       return null;
     }
     return { modoDivisao: 'exato', divisao, participantes };
@@ -2691,7 +2807,9 @@ function cancelarEdicao() {
   fecharMenuCategoria();
   document.getElementById('edit-gasto-id').value = '';
   document.getElementById('form-gasto')?.reset();
+  document.getElementById('moeda-gasto').value = moedaBase();
   document.querySelector('#pagador-gasto option[value="__splitrao_unknown__"]')?.remove();
+  renderPagadorSelect(true);
   dataGastoSelecionada = getTodayISO();
   atualizarLabelDataGasto();
   categoriaSelecionada = null;
@@ -2725,11 +2843,11 @@ function iniciarEdicaoGasto(gastoId) {
   atualizarBadgeCategoriaAuto();
   renderSeletorCategorias();
 
-  const moeda = g.moeda || 'BRL';
+  const moeda = g.moeda || moedaBase();
   document.getElementById('moeda-gasto').value = moeda;
   document.getElementById('valor-gasto').value = g.valor;
-  if (moeda !== 'BRL' && typeof g.taxaCambio === 'number') {
-    document.getElementById('taxa-cambio').value = g.taxaCambio;
+  if (typeof g.taxaCambio === 'number') {
+    document.getElementById('taxa-cambio').value = taxaExibida(g, grupo);
   }
   atualizarSeletorMoedaUI();
 
@@ -2766,7 +2884,8 @@ function iniciarEdicaoGasto(gastoId) {
     area.appendChild(wrap);
     atualizarFeedbackDivisao();
   } else if (modoDivisaoAtual === 'exato') {
-    renderAreaDivisao(g.divisao || {});
+    renderAreaDivisao(divisaoExibida(g, grupo));
+    document.querySelectorAll('#area-divisao-dinamica [data-pessoa-custom]').forEach(i=>i.dataset.valorInicial=i.value);
   } else {
     renderAreaDivisao(g.cotas || {});
   }
@@ -2886,7 +3005,7 @@ function calcularBalancoGrupo(grupo) {
 
   for (const g of gastos) {
     if (!g) continue;
-    const valBRL = Number(getValorEmBRL(g)) || 0;
+    const valBRL = Number(getValorEmBRL(g, grupo)) || 0;
 
     if (g.tipo === 'pagamento') {
       const { de: deRaw, para: paraRaw } = extrairPartesPagamento(g);
@@ -2906,7 +3025,7 @@ function calcularBalancoGrupo(grupo) {
 
     const divisao = g.divisao || {};
     for (const [pessoa, share] of Object.entries(divisao)) {
-      const parte = Number(share) || 0;
+      const parte = (Number(share) || 0) * fatorMoeda(grupo);
       const chavePessoa = acharChaveStats(pessoa);
       if (chavePessoa && stats[chavePessoa]) {
         stats[chavePessoa].consumiu += parte;
@@ -2919,10 +3038,11 @@ function calcularBalancoGrupo(grupo) {
 
   pessoas.forEach(p => {
     const s = stats[p];
+    const saldoBruto=s.pagou-s.consumiu+s.acertosLiquidos;
     s.pagou = Math.round(s.pagou * 100) / 100;
     s.consumiu = Math.round(s.consumiu * 100) / 100;
     s.acertosLiquidos = Math.round(s.acertosLiquidos * 100) / 100;
-    s.saldo = Math.round((s.pagou - s.consumiu + s.acertosLiquidos) * 100) / 100;
+    s.saldo = Math.round(saldoBruto * 100) / 100;
 
     if (s.saldo > 0.01) {
       credores.push({ pessoa: p, valor: s.saldo });
@@ -2988,7 +3108,7 @@ function renderMeuSaldoDestaque(grupo, stats, transferencias) {
 
   const meuSaldo = stats[meName].saldo || 0;
   const classeSaldo = meuSaldo > 0.01 ? 'positivo' : (meuSaldo < -0.01 ? 'negativo' : 'neutro');
-  const valorAbsFmt = formatMoney(Math.abs(meuSaldo), 'BRL');
+  const valorAbsFmt = formatMoney(Math.abs(meuSaldo), moedaBase());
 
   let fraseResumoTopo = t('myBalanceZero');
   if (meuSaldo < -0.01) {
@@ -3015,7 +3135,7 @@ function renderMeuSaldoDestaque(grupo, stats, transferencias) {
     linhasHTML += `
       <div class="meu-saldo-linha">
         <span>${escapeHTML(t('myBalanceReceiveFrom'))} <strong>${escapeHTML(tr.de)}</strong></span>
-        <strong class="positivo">+${escapeHTML(formatMoney(tr.valor, 'BRL'))}</strong>
+        <strong class="positivo">+${escapeHTML(formatMoney(tr.valor, moedaBase()))}</strong>
       </div>
     `;
   });
@@ -3025,7 +3145,7 @@ function renderMeuSaldoDestaque(grupo, stats, transferencias) {
         <span>${escapeHTML(t('myBalancePayTo'))} <strong>${escapeHTML(tr.para)}</strong>
           <button type="button" class="btn-quitar-rapido" data-quitar-de="${escapeHTML(tr.de)}" data-quitar-para="${escapeHTML(tr.para)}" data-quitar-valor="${tr.valor.toFixed(2)}">${escapeHTML(t('quickSettleBtn'))}</button>
         </span>
-        <strong class="negativo">-${escapeHTML(formatMoney(tr.valor, 'BRL'))}</strong>
+        <strong class="negativo">-${escapeHTML(formatMoney(tr.valor, moedaBase()))}</strong>
       </div>
     `;
   });
@@ -3068,7 +3188,7 @@ function renderSaldosEAcertos() {
   transferencias.forEach(tr => {
     const li = document.createElement('li');
     const texto = document.createElement('span');
-    texto.innerHTML = `<strong>${escapeHTML(tr.de)}</strong> ${escapeHTML(t('owesText'))} <strong>${escapeHTML(formatMoney(tr.valor, 'BRL'))}</strong> ${escapeHTML(t('toText'))} <strong>${escapeHTML(tr.para)}</strong>`;
+    texto.innerHTML = `<strong>${escapeHTML(tr.de)}</strong> ${escapeHTML(t('owesText'))} <strong>${escapeHTML(formatMoney(tr.valor, moedaBase()))}</strong> ${escapeHTML(t('toText'))} <strong>${escapeHTML(tr.para)}</strong>`;
 
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -3129,7 +3249,7 @@ function renderHistorico() {
   const totalDespesasBRL = despesas.reduce((acc, g) => acc + getValorEmBRL(g), 0);
 
   if (badgeTotal) {
-    badgeTotal.textContent = formatMoney(totalDespesasBRL, 'BRL');
+    badgeTotal.textContent = formatMoney(totalDespesasBRL, moedaBase());
   }
 
   if (!ul) return;
@@ -3144,10 +3264,10 @@ function renderHistorico() {
   filtradosOrdenados.forEach(g => {
     const li = document.createElement('li');
     const valBRL = getValorEmBRL(g);
-    const moeda = g.moeda || 'BRL';
-    const valorDisplay = moeda === 'BRL'
-      ? formatMoney(valBRL, 'BRL')
-      : `${formatMoney(g.valor, moeda)} (${formatMoney(valBRL, 'BRL')})`;
+    const moeda = g.moeda || moedaBase();
+    const valorDisplay = moeda === moedaBase()
+      ? formatMoney(valBRL, moedaBase())
+      : `${formatMoney(g.valor, moeda)} (${formatMoney(valBRL, moedaBase())})`;
 
     if (g.tipo === 'pagamento') {
       const { de: pagadorNome, para: recebedorNome } = extrairPartesPagamento(g);
@@ -3280,7 +3400,7 @@ function renderPainelTotais() {
         <div class="total-row-item">
           <div class="total-row-top">
             <span class="total-row-label">${obj ? obj.icon : ''}<span>${escapeHTML(getNomeCategoriaTraduzido(catId))}</span></span>
-            <strong>${escapeHTML(formatMoney(val, 'BRL'))} (${pct}%)</strong>
+            <strong>${escapeHTML(formatMoney(val, moedaBase()))} (${pct}%)</strong>
           </div>
           <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
         </div>
@@ -3296,7 +3416,7 @@ function renderPainelTotais() {
         <div class="total-row-item">
           <div class="total-row-top">
             <span class="total-row-label"><span>${escapeHTML(rotuloMes)}</span></span>
-            <strong>${escapeHTML(formatMoney(val, 'BRL'))} (${pct}%)</strong>
+            <strong>${escapeHTML(formatMoney(val, moedaBase()))} (${pct}%)</strong>
           </div>
           <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
         </div>
@@ -3307,7 +3427,7 @@ function renderPainelTotais() {
     <div class="totais-resumo-cards" style="grid-template-columns: 1fr;">
       <div class="total-mini-card">
         <small>${escapeHTML(filtroCategoriaAtual === 'todas' ? t('groupTotalCard') : t('activeFilterTotalCard'))}</small>
-        <strong>${escapeHTML(formatMoney(filtroCategoriaAtual === 'todas' ? totalGrupo : totalFiltro, 'BRL'))}</strong>
+        <strong>${escapeHTML(formatMoney(filtroCategoriaAtual === 'todas' ? totalGrupo : totalFiltro, moedaBase()))}</strong>
       </div>
     </div>
     <div class="totais-bloco">
@@ -3328,21 +3448,22 @@ function sincronizarMoedasQuitar() {
   if (!origem || !destino) return;
 
   const valorAtual = destino.value;
-  destino.innerHTML = '';
-  Array.from(origem.options).forEach(opt => {
-    destino.appendChild(opt.cloneNode(true));
-  });
+  preencherMoedas(destino);
 
   if (valorAtual && Array.from(destino.options).some(o => o.value === valorAtual)) {
     destino.value = valorAtual;
   } else {
-    destino.value = 'BRL';
+    destino.value = moedaBase();
   }
 }
 
 function getTaxaQuitar() {
-  const moeda = document.getElementById('quitar-moeda')?.value || 'BRL';
-  if (moeda === 'BRL') return 1;
+  const moeda = document.getElementById('quitar-moeda')?.value || moedaBase();
+  if (moeda === moedaBase()) {
+    const grupo = getGrupoAtivo();
+    const anterior = grupo.gastos.find(g=>g.id===edicaoPagamento?.id && g.moeda===moeda);
+    return anterior ? taxaExibida(anterior, grupo) : 1;
+  }
 
   const taxaDigitada = parseFloat(document.getElementById('quitar-taxa-cambio')?.value);
   if (!isNaN(taxaDigitada) && taxaDigitada > 0) return taxaDigitada;
@@ -3351,24 +3472,25 @@ function getTaxaQuitar() {
   const taxaSalva = grupo?.taxasCambio?.[moeda];
   if (typeof taxaSalva === 'number' && taxaSalva > 0) return taxaSalva;
 
-  return 1;
+  return 0;
 }
 
 function atualizarUIQuitarMoeda() {
-  const moeda = document.getElementById('quitar-moeda')?.value || 'BRL';
+  const moeda = document.getElementById('quitar-moeda')?.value || moedaBase();
   const boxCambio = document.getElementById('quitar-box-cambio');
   const moedaLabel = document.getElementById('quitar-cambio-moeda');
   const taxaInput = document.getElementById('quitar-taxa-cambio');
   const valorInput = document.getElementById('quitar-valor');
   const convertidoEl = document.getElementById('quitar-valor-convertido-brl');
 
-  if (moeda === 'BRL') {
+  if (moeda === moedaBase()) {
     boxCambio?.classList.add('hidden');
     return;
   }
 
   boxCambio?.classList.remove('hidden');
   if (moedaLabel) moedaLabel.textContent = moeda;
+  document.getElementById('quitar-base-code').textContent = moedaBase();
 
   const grupo = getGrupoAtivo();
   if (taxaInput && (!taxaInput.value || parseFloat(taxaInput.value) <= 0)) {
@@ -3381,35 +3503,34 @@ function atualizarUIQuitarMoeda() {
   const valor = parseFloat(valorInput?.value) || 0;
   const taxa = getTaxaQuitar();
   if (convertidoEl) {
-    convertidoEl.textContent = formatMoney(valor * taxa, 'BRL');
+    convertidoEl.textContent = formatMoney(valor * taxa, moedaBase());
   }
 }
 
 async function buscarCotacaoQuitar() {
-  const moeda = document.getElementById('quitar-moeda')?.value || 'BRL';
-  if (moeda === 'BRL') return;
+  const moeda = document.getElementById('quitar-moeda')?.value || moedaBase();
+  if (moeda === moedaBase()) return;
 
   const statusEl = document.getElementById('quitar-cambio-status');
   const taxaInput = document.getElementById('quitar-taxa-cambio');
   if (statusEl) statusEl.textContent = t('fetchingRateMsg');
 
+  const grupo = getGrupoAtivo(), base = moedaBase(grupo);
   try {
     const res = await fetch(`https://open.er-api.com/v6/latest/${encodeURIComponent(moeda)}`);
     if (!res.ok) throw new Error('Falha na API de câmbio');
     const data = await res.json();
-    const rate = data?.rates?.BRL;
+    const rate = data?.rates?.[base];
     if (typeof rate !== 'number' || rate <= 0) throw new Error('Cotação inválida');
 
-    const rounded = Number(rate.toFixed(6));
+    if (getGrupoAtivo().id !== grupo.id || moedaBase() !== base || document.getElementById("quitar-moeda").value !== moeda) return;
+    const rounded = rate;
     if (taxaInput) taxaInput.value = rounded;
 
-    const grupo = getGrupoAtivo();
     grupo.taxasCambio = grupo.taxasCambio || {};
     grupo.taxasCambio[moeda] = rounded;
-    await salvarGrupoNaNuvem(grupo);
-
     atualizarUIQuitarMoeda();
-    if (statusEl) statusEl.textContent = t('rateFetchedMsg', { curr: moeda });
+    if (statusEl) statusEl.textContent = t('rateFetchedMsg', { curr: moeda, base: moedaBase() });
   } catch {
     if (statusEl) statusEl.textContent = t('rateErrorMsg');
   }
@@ -3472,11 +3593,11 @@ function abrirModalQuitar(dePadrao = '', paraPadrao = '', valorPadrao = '', paga
   }
 
   if (selMoeda) {
-    const moeda = pagamento?.moeda || 'BRL';
+    const moeda = pagamento?.moeda || moedaBase();
     if (!Array.from(selMoeda.options).some(o => o.value === moeda)) selMoeda.add(new Option(moeda, moeda));
     selMoeda.value = moeda;
   }
-  if (inpTaxa) inpTaxa.value = pagamento?.taxaCambio || '';
+  if (inpTaxa) inpTaxa.value = pagamento ? taxaExibida(pagamento, grupo) : '';
   if (statusEl) statusEl.textContent = '';
   if (inpVal) inpVal.value = valorPadrao || '';
   if (inpObs) inpObs.value = pagamento?.obs || '';
@@ -3505,7 +3626,7 @@ function abrirRelatorio() {
 
   const pendenciasHTML = transferencias.length === 0
     ? `<p>${escapeHTML(t('reportAllSettled'))}</p>`
-    : `<ul>${transferencias.map(tr => `<li><strong>${escapeHTML(tr.de)}</strong> ${escapeHTML(t('reportStillOwes'))} <strong>${escapeHTML(formatMoney(tr.valor, 'BRL'))}</strong> ${escapeHTML(t('toText'))} <strong>${escapeHTML(tr.para)}</strong></li>`).join('')}</ul>`;
+    : `<ul>${transferencias.map(tr => `<li><strong>${escapeHTML(tr.de)}</strong> ${escapeHTML(t('reportStillOwes'))} <strong>${escapeHTML(formatMoney(tr.valor, moedaBase()))}</strong> ${escapeHTML(t('toText'))} <strong>${escapeHTML(tr.para)}</strong></li>`).join('')}</ul>`;
 
   const balancoRows = grupo.pessoas.map(p => {
     const s = stats[p] || { pagou: 0, consumiu: 0, acertosLiquidos: 0, saldo: 0 };
@@ -3513,10 +3634,10 @@ function abrirRelatorio() {
     return `
       <tr>
         <td>${escapeHTML(p)}</td>
-        <td>${escapeHTML(formatMoney(s.pagou, 'BRL'))}</td>
-        <td>${escapeHTML(formatMoney(s.consumiu, 'BRL'))}</td>
-        <td>${escapeHTML(formatMoney(s.acertosLiquidos, 'BRL'))}</td>
-        <td class="${cls}"><strong>${escapeHTML(formatMoney(s.saldo, 'BRL'))}</strong></td>
+        <td>${escapeHTML(formatMoney(s.pagou, moedaBase()))}</td>
+        <td>${escapeHTML(formatMoney(s.consumiu, moedaBase()))}</td>
+        <td>${escapeHTML(formatMoney(s.acertosLiquidos, moedaBase()))}</td>
+        <td class="${cls}"><strong>${escapeHTML(formatMoney(s.saldo, moedaBase()))}</strong></td>
       </tr>
     `;
   }).join('');
@@ -3528,7 +3649,7 @@ function abrirRelatorio() {
   });
   const catRows = Object.entries(porCat).sort((a, b) => b[1] - a[1]).map(([c, v]) => {
     const pct = totalDespesas > 0 ? ((v / totalDespesas) * 100).toFixed(1) : '0.0';
-    return `<tr><td>${escapeHTML(getNomeCategoriaTraduzido(c))}</td><td>${escapeHTML(formatMoney(v, 'BRL'))}</td><td>${pct}%</td></tr>`;
+    return `<tr><td>${escapeHTML(getNomeCategoriaTraduzido(c))}</td><td>${escapeHTML(formatMoney(v, moedaBase()))}</td><td>${pct}%</td></tr>`;
   }).join('');
 
   const expRows = despesas.length === 0
@@ -3538,7 +3659,7 @@ function abrirRelatorio() {
         <td>${escapeHTML(g.data ? formatDateBR(g.data) : '-')}</td>
         <td>${escapeHTML(g.descricao)}</td>
         <td>${escapeHTML(g.pagadorNaoIdentificado ? t('unknownPayer') : g.pagador)}</td>
-        <td>${escapeHTML(formatMoney(getValorEmBRL(g), 'BRL'))}</td>
+        <td>${escapeHTML(formatMoney(getValorEmBRL(g), moedaBase()))}</td>
       </tr>
     `).join('');
 
@@ -3546,7 +3667,7 @@ function abrirRelatorio() {
     <tr>
       <td>${escapeHTML(p.data ? formatDateBR(p.data) : '-')}</td>
       <td>${escapeHTML(p.de)} → ${escapeHTML(p.para)}${p.obs ? ` (${escapeHTML(p.obs)})` : ''}</td>
-      <td>${escapeHTML(formatMoney(getValorEmBRL(p), 'BRL'))}</td>
+      <td>${escapeHTML(formatMoney(getValorEmBRL(p), moedaBase()))}</td>
     </tr>
   `).join('');
 
@@ -3554,7 +3675,7 @@ function abrirRelatorio() {
     <div class="rel-section">
       <p><strong>${escapeHTML(t('reportGroupLabel'))}</strong> ${escapeHTML(grupo.nome)}</p>
       <p><strong>${escapeHTML(t('reportDateLabel'))}</strong> ${escapeHTML(formatDateBR(getTodayISO()))}</p>
-      <p><strong>${escapeHTML(t('reportTotalExpensesLabel'))}</strong> ${escapeHTML(formatMoney(totalDespesas, 'BRL'))}</p>
+      <p><strong>${escapeHTML(t('reportTotalExpensesLabel'))}</strong> ${escapeHTML(formatMoney(totalDespesas, moedaBase()))}</p>
     </div>
     <div class="rel-section">
       <h3>${escapeHTML(t('reportSec1Title'))}</h3>
@@ -3594,7 +3715,7 @@ function abrirRelatorio() {
 
   const linhasWpp = [
     t('wppReportHeader', { name: grupo.nome }),
-    t('wppTotalExpenses', { val: formatMoney(totalDespesas, 'BRL') }),
+    t('wppTotalExpenses', { val: formatMoney(totalDespesas, moedaBase()) }),
     '',
     t('wppPendingHeader')
   ];
@@ -3602,7 +3723,7 @@ function abrirRelatorio() {
     linhasWpp.push(t('wppAllSettled'));
   } else {
     transferencias.forEach(tr => {
-      linhasWpp.push(t('wppPaysLine', { from: tr.de, val: formatMoney(tr.valor, 'BRL'), to: tr.para }));
+      linhasWpp.push(t('wppPaysLine', { from: tr.de, val: formatMoney(tr.valor, moedaBase()), to: tr.para }));
     });
   }
   ultimoTextoWhatsApp = linhasWpp.join('\n');
@@ -3611,18 +3732,24 @@ function abrirRelatorio() {
 }
 
 function calcularBalancoGlobal() {
-  const gruposLista = Object.values(state.grupos || {});
+  const grupos = Object.values(state.grupos || {}).filter(g=>!g.deleted);
+  const partes = [...new Set(grupos.map(g=>moedaBase(g)))].map(m=>calcularBalancoGlobalMoeda(grupos.filter(g=>moedaBase(g)===m),m));
+  return {totalGrupos:grupos.length, consolidadoPorPessoa:partes.flatMap(p=>p.consolidadoPorPessoa), transferenciasGlobais:partes.flatMap(p=>p.transferenciasGlobais)};
+}
+function calcularBalancoGlobalMoeda(gruposLista, moeda) {
   const consolidadoPorPessoa = {};
 
   gruposLista.forEach(g => {
     const { stats } = calcularBalancoGrupo(g);
     Object.values(stats).forEach(s => {
-      if (!consolidadoPorPessoa[s.nome]) {
-        consolidadoPorPessoa[s.nome] = { nome: s.nome, saldoTotal: 0, porGrupo: [] };
+      const uid = Object.keys(g.vinculos || {}).find(u=>g.vinculos[u]===s.nome);
+      const chave = uid ? `uid:${uid}` : `grupo:${g.id}:${s.nome}`;
+      if (!consolidadoPorPessoa[chave]) {
+        consolidadoPorPessoa[chave] = { nome: s.nome, moeda, saldoTotal: 0, porGrupo: [] };
       }
-      consolidadoPorPessoa[s.nome].saldoTotal = Math.round((consolidadoPorPessoa[s.nome].saldoTotal + s.saldo) * 100) / 100;
+      consolidadoPorPessoa[chave].saldoTotal = Math.round((consolidadoPorPessoa[chave].saldoTotal + s.saldo) * 100) / 100;
       if (Math.abs(s.saldo) > 0.01) {
-        consolidadoPorPessoa[s.nome].porGrupo.push({ grupoNome: g.nome, saldo: s.saldo });
+        consolidadoPorPessoa[chave].porGrupo.push({ grupoNome: g.nome, saldo: s.saldo });
       }
     });
   });
@@ -3643,7 +3770,7 @@ function calcularBalancoGlobal() {
     const quantia = Math.min(devedores[i].valor, credores[j].valor);
     const arred = Math.round(quantia * 100) / 100;
     if (arred > 0.01) {
-      transferenciasGlobais.push({ de: devedores[i].pessoa, para: credores[j].pessoa, valor: arred });
+      transferenciasGlobais.push({ de: devedores[i].pessoa, para: credores[j].pessoa, valor: arred, moeda });
     }
     devedores[i].valor = Math.round((devedores[i].valor - quantia) * 100) / 100;
     credores[j].valor = Math.round((credores[j].valor - quantia) * 100) / 100;
@@ -3665,20 +3792,20 @@ function abrirModalGlobal() {
 
   const transfHTML = transferenciasGlobais.length === 0
     ? `<p>${escapeHTML(t('globalAllSettled'))}</p>`
-    : `<ul>${transferenciasGlobais.map(tr => `<li><strong>${escapeHTML(tr.de)}</strong> → <strong>${escapeHTML(tr.para)}</strong>: <strong>${escapeHTML(formatMoney(tr.valor, 'BRL'))}</strong></li>`).join('')}</ul>`;
+    : `<ul>${transferenciasGlobais.map(tr => `<li><strong>${escapeHTML(tr.de)}</strong> → <strong>${escapeHTML(tr.para)}</strong>: <strong>${escapeHTML(formatMoney(tr.valor, tr.moeda))}</strong></li>`).join('')}</ul>`;
 
   const rowsHTML = consolidadoPorPessoa
-    .sort((a, b) => b.saldoTotal - a.saldoTotal)
+    .sort((a, b) => a.moeda.localeCompare(b.moeda) || b.saldoTotal - a.saldoTotal)
     .map(p => {
       const cls = p.saldoTotal > 0.01 ? 'positivo' : (p.saldoTotal < -0.01 ? 'negativo' : 'neutro');
       const origem = p.porGrupo.length > 0
-        ? p.porGrupo.map(og => `${og.grupoNome} (${formatMoney(og.saldo, 'BRL')})`).join(', ')
+        ? p.porGrupo.map(og => `${og.grupoNome} (${formatMoney(og.saldo, p.moeda)})`).join(', ')
         : t('zeroedInAll');
       return `
         <tr>
           <td><strong>${escapeHTML(p.nome)}</strong></td>
           <td><small>${escapeHTML(origem)}</small></td>
-          <td class="${cls}"><strong>${escapeHTML(formatMoney(p.saldoTotal, 'BRL'))}</strong></td>
+          <td class="${cls}"><strong>${escapeHTML(formatMoney(p.saldoTotal, p.moeda))}</strong></td>
         </tr>
       `;
     }).join('');
@@ -3710,7 +3837,7 @@ function abrirModalGlobal() {
     linhasWpp.push(t('wppGlobalAllSettled'));
   } else {
     transferenciasGlobais.forEach(tr => {
-      linhasWpp.push(t('wppPaysLine', { from: tr.de, val: formatMoney(tr.valor, 'BRL'), to: tr.para }));
+      linhasWpp.push(t('wppPaysLine', { from: tr.de, val: formatMoney(tr.valor, tr.moeda), to: tr.para }));
     });
   }
   ultimoTextoWhatsApp = linhasWpp.join('\n');
@@ -3826,7 +3953,8 @@ function converterSplitwiseCSVParaGrupo(csvText, nomeArquivo = 'Splitwise') {
 
     const data = normalizarDataFlexivel(idxData >= 0 ? cols[idxData] : '');
     const moedaRaw = idxCurr >= 0 ? String(cols[idxCurr] || '').trim().toUpperCase() : 'BRL';
-    const moeda = MOEDAS[moedaRaw] ? moedaRaw : 'BRL';
+    if (!MOEDAS[moedaRaw]) throw new Error('Unsupported currency: '+moedaRaw);
+    const moeda = moedaRaw;
 
     const deltas = {};
     let totalPositivo = 0;
@@ -3903,10 +4031,13 @@ function converterSplitwiseCSVParaGrupo(csvText, nomeArquivo = 'Splitwise') {
     }
   }
 
+  const moedasOriginais = [...new Set(gastos.map(g=>g.moeda))];
+  if (moedasOriginais.length>1) throw new Error(t('mixedImport'));
   const nomeBase = nomeArquivo.replace(/\.csv$/i, '').trim() || 'Grupo Splitwise';
   return {
     id: gerarId('grp'),
     nome: nomeBase,
+    moedaBase: moedasOriginais[0] || 'BRL',
     pessoas: Array.from(pessoasSet),
     gastos
   };
@@ -3930,7 +4061,8 @@ function converterSplitwiseJSONParaGrupos(parsed) {
       const desc = String(exp.description || exp.name || exp.title || 'Despesa Splitwise').trim();
       const data = normalizarDataFlexivel(exp.date || exp.created_at || exp.updated_at);
       const moedaRaw = String(exp.currency_code || exp.currency || 'BRL').trim().toUpperCase();
-      const moeda = MOEDAS[moedaRaw] ? moedaRaw : 'BRL';
+      if (!MOEDAS[moedaRaw]) throw new Error('Unsupported currency: '+moedaRaw);
+    const moeda = moedaRaw;
       const valorTotal = Math.abs(parseNumeroFlexivel(exp.cost ?? exp.amount ?? exp.total ?? 0));
 
       const users = Array.isArray(exp.users) ? exp.users : (Array.isArray(exp.repayments) ? exp.repayments : []);
@@ -4015,12 +4147,15 @@ function converterSplitwiseJSONParaGrupos(parsed) {
       }
     }
 
+    const moedasOriginais = [...new Set(gastos.map(g=>g.moeda))];
+    if (moedasOriginais.length>1) throw new Error(t('mixedImport'));
     const nomeGrupo = parsed.group?.name || parsed.group_name || 'Grupo Splitwise';
     return [{
       chaveOriginal: parsed.group?.id ? `sw_${parsed.group.id}` : gerarId('grp'),
       gdata: {
         id: gerarId('grp'),
         nome: nomeGrupo,
+        moedaBase: moedasOriginais[0] || 'BRL',
         pessoas: Array.from(pessoasSet),
         gastos
       }
@@ -4095,7 +4230,8 @@ async function persistirGruposImportados(entradas, { novoCodigo = false } = {}) 
   let primeiroIdNovo = null;
   entradas = entradas.filter(e => e.gdata && typeof e.gdata === 'object');
   let escolhas = null;
-  if (novoCodigo && currentUser) {
+  // Importações e backups criam cópias independentes, sem substituir grupos ativos.
+  if (currentUser) {
     const grupos = entradas.map(({gdata}) => normalizarEstruturaGrupo(gdata.id || '', gdata));
     escolhas = await selecionarParticipantesImportacao(grupos);
     if (!escolhas) return false;
@@ -4110,9 +4246,10 @@ async function persistirGruposImportados(entradas, { novoCodigo = false } = {}) 
 
     let gid = state.grupos[idCandidato] ? gerarId('grp') : idCandidato;
     let norm = normalizarEstruturaGrupo(gid, { ...gdata, id: gid });
-    if (novoCodigo) {
+    if (currentUser) {
       const escolha = escolhas?.[indice];
       if (escolha) {
+        converterBaseImportada(norm, escolha.moeda, escolha.taxa);
         if (escolha.escolha) renomearNomeEmGrupo(norm, escolha.escolha, escolha.nome);
         else norm.pessoas.push(escolha.nome);
         norm.meuParticipante = escolha.nome;
@@ -4121,30 +4258,12 @@ async function persistirGruposImportados(entradas, { novoCodigo = false } = {}) 
       norm = await reservarNovoGrupo(norm, currentUser?.uid, escolha?.nome);
       gid = norm.id;
     }
-    if (!novoCodigo && currentUser) { norm.members = { [currentUser.uid]: true }; norm.vinculos = {}; }
     state.grupos[gid] = norm;
     cloudGroupsCache[gid] = norm;
 
     if (!primeiroIdNovo) primeiroIdNovo = gid;
 
     if (currentUser) {
-      if (!novoCodigo) await setDoc(getGroupDocRef(gid), {
-        id: norm.id,
-        nome: norm.nome,
-        order: typeof norm.order === 'number' ? norm.order : 0,
-        image: norm.image || null,
-        pessoas: norm.pessoas || [],
-        participantesSemApp: norm.participantesSemApp || [],
-        meuParticipante: norm.meuParticipante || null,
-        gastos: norm.gastos || [],
-        taxasCambio: norm.taxasCambio || {},
-        deleted: false,
-        members: { [currentUser.uid]: true },
-        vinculos: {},
-        updatedAt: Date.now(),
-        updatedBy: currentUser.uid
-      }, { merge: true });
-
       await vincularGrupoAoUsuario(currentUser.uid, gid, gid === primeiroIdNovo);
     } else {
       salvarEstadoLocal();
@@ -4213,7 +4332,7 @@ async function importarBackupJSON(file) {
   } catch (e) {
     console.error('Erro ao importar arquivo:', e);
     setSaveStatus('statusSaveError');
-    alert(t('importError', { detail: t('importErrorDetail') }));
+    alert(t('importError', { detail: e.message || t('importErrorDetail') }));
   } finally {
     setTimeout(() => {
       isSavingCloud = false;
@@ -4246,44 +4365,19 @@ async function processarImportacaoPendenteSplitwise() {
 function renderResumoGlobalUsuario() {
   const banner = document.getElementById('global-user-banner');
   if (!banner) return;
-
-  const grupoAtivo = getGrupoAtivo();
-  const nomeUsuario = getMeParticipantName(grupoAtivo) || getNomeUsuarioEfetivo();
-  if (!nomeUsuario) {
-    banner.classList.add('hidden');
-    banner.innerHTML = '';
-    return;
+  const saldos = {};
+  for (const grupo of getGruposOrdenados()) {
+    const nome = getMeParticipantName(grupo);
+    if (!nome) continue;
+    const moeda = moedaBase(grupo);
+    saldos[moeda] = (saldos[moeda] || 0) + (calcularBalancoGrupo(grupo).stats[nome]?.saldo || 0);
   }
-
-  const { consolidadoPorPessoa } = calcularBalancoGlobal();
-  const alvo = normalizarTexto(nomeUsuario);
-  const encontrado = consolidadoPorPessoa.find(item => normalizarTexto(item.nome) === alvo);
-  const saldoTotal = encontrado ? (Number(encontrado.saldoTotal) || 0) : 0;
-
-  banner.classList.remove('hidden', 'positivo', 'negativo', 'neutro', 'resumo-devo', 'resumo-receber', 'resumo-quitado');
-
-  let fraseHTML = '';
-
-  if (saldoTotal > 0.01) {
-    const valorFmt = formatMoney(saldoTotal, 'BRL');
-    banner.classList.add('positivo', 'resumo-receber');
-    fraseHTML = t('myBalanceReceiveTotal', {
-      val: `<strong class="resumo-valor">${escapeHTML(valorFmt)}</strong>`
-    });
-  } else if (saldoTotal < -0.01) {
-    const valorFmt = formatMoney(Math.abs(saldoTotal), 'BRL');
-    banner.classList.add('negativo', 'resumo-devo');
-    fraseHTML = t('myBalancePayTotal', {
-      val: `<strong class="resumo-valor">${escapeHTML(valorFmt)}</strong>`
-    });
-  } else {
-    banner.classList.add('neutro', 'resumo-quitado');
-    fraseHTML = escapeHTML(t('myBalanceGlobalZero'));
-  }
-
-  banner.innerHTML = `
-    <p id="global-user-texto" class="resumo-texto">${fraseHTML}</p>
-  `;
+  const entradas = Object.entries(saldos).map(([m,v])=>[m,Math.round(v*100)/100]);
+  const linhas = (positivos) => entradas.filter(([,v])=>positivos?v>0:v<0).map(([m,v])=>`<p class="resumo-texto ${positivos?'positivo':'negativo'}">${t(positivos?'myBalanceReceiveTotal':'myBalancePayTotal',{val:`<strong class="resumo-valor">${escapeHTML(formatMoney(Math.abs(v),m))}</strong>`})}</p>`).join('');
+  const receber=linhas(true), pagar=linhas(false);
+  banner.classList.remove('hidden','positivo','negativo','neutro','resumo-devo','resumo-receber','resumo-quitado');
+  banner.classList.add(receber && !pagar?'resumo-receber':pagar && !receber?'resumo-devo':'resumo-quitado');
+  banner.innerHTML = receber+pagar || `<p class="resumo-texto">${escapeHTML(t('myBalanceGlobalZero'))}</p>`;
 }
 
 function renderTudo() {
@@ -4308,7 +4402,10 @@ function renderTudo() {
 
 // ===== 21. EVENTOS DA INTERFACE =====
 function initListeners() {
+  preencherMoedas(document.getElementById('moeda-gasto'));
+  preencherMoedas(document.getElementById('novo-grupo-moeda'));
   sincronizarMoedasQuitar();
+  adicionarBuscaMoeda(document.getElementById('novo-grupo-moeda'));
 
   document.getElementById('btn-novo-gasto-grupo')?.addEventListener('click', (e) => {
     e.preventDefault();
@@ -4355,6 +4452,52 @@ function initListeners() {
     if (menuHome3DotsAberto) setMenu3DotsHomeAberto(false);
   });
 
+  document.getElementById('btn-moeda-grupo')?.addEventListener('click', async()=>{
+    const grupo=getGrupoAtivo(); setMenu3DotsAberto(false);
+    const origem = moedaBase(grupo), referencia = moedaReferencia(grupo);
+    const escolha = await modalSelecao(t('baseCurrency'), (corpo, fechar)=>{
+      const sel=document.createElement('select'); preencherMoedas(sel); sel.value=origem;
+      const aviso=document.createElement('p'); aviso.textContent=t('currencyWarning');
+      const label=document.createElement('label'), taxa=document.createElement('input');
+      taxa.type='number'; taxa.min='0'; taxa.step='any';
+      const status=document.createElement('small');
+      let pedido=0;
+      const atualizar=async()=>{
+        const token=++pedido, destino=sel.value;
+        const conhecida=sel.value===referencia || grupo.fatoresMoeda?.[sel.value]>0;
+        label.hidden=sel.value===origem || conhecida || (!grupo.gastos.length && !Object.keys(grupo.fatoresMoeda||{}).length);
+        label.replaceChildren(document.createTextNode(`1 ${origem} = ${sel.value} `),taxa);
+        taxa.value=''; status.textContent='';
+        if(label.hidden)return;
+        status.textContent=t('fetchingRateMsg');
+        try {
+          const rate=await consultarCotacao(origem,destino);
+          if(token!==pedido || sel.value!==destino || !sel.isConnected)return;
+          if(!taxa.value)taxa.value=formatarCotacaoSugerida(rate);
+          status.textContent=t('rateFetchedMsg',{curr:origem,base:destino});
+        } catch {if(token===pedido)status.textContent=t('rateErrorMsg');}
+      };
+      sel.onchange=atualizar; corpo.append(sel,aviso,label,status); adicionarBuscaMoeda(sel); atualizar();
+      botaoV26(corpo,t('saveGroupName'),()=>{
+        if(sel.value===origem){fechar(null);return;}
+        const f=sel.value===referencia?1:grupo.fatoresMoeda?.[sel.value] || ((grupo.gastos.length || Object.keys(grupo.fatoresMoeda||{}).length)?Number(taxa.value)*fatorMoeda(grupo):1);
+        if(!(f>0 && Number.isFinite(f))){alert(t('baseRateRequired'));return;}
+        if(grupo.gastos.length && !confirm(t('currencyConfirm',{from:origem,to:sel.value})))return;
+        fechar({moeda:sel.value,fator:f});
+      });
+    });
+    if(!escolha)return;
+    try {
+      const atualizado=await runTransaction(db,async tx=>{
+        const ref=getGroupDocRef(grupo.id), snap=await tx.get(ref), remoto=snap.data();
+        if(!snap.exists() || !membrosReais(remoto)[currentUser.uid] || moedaBase(remoto)!==origem || fatorMoeda(remoto)!==fatorMoeda(grupo) || assinaturaMonetaria(normalizarEstruturaGrupo(grupo.id,remoto).gastos)!==assinaturaMonetaria(grupo.gastos||[]))throw new Error('Group changed');
+        const vazio=!grupo.gastos.length && !Object.keys(grupo.fatoresMoeda||{}).length;
+        const config={moedaBase:escolha.moeda,moedaReferencia:vazio?escolha.moeda:referencia,fatoresMoeda:vazio?{}:{...(remoto.fatoresMoeda||{}),[escolha.moeda]:escolha.fator},taxasCambio:{}};
+        tx.update(ref,config); return config;
+      });
+      Object.assign(grupo,atualizado); Object.assign(state.grupos[grupo.id] || grupo,atualizado); cloudGroupsCache[grupo.id]=state.grupos[grupo.id] || grupo; salvarEstadoLocal(); cancelarEdicao(); fecharModalQuitar(); renderTudo();
+    } catch(e){console.error(e);alert(t('currencyChangeError'));}
+  });
   document.getElementById('btn-novo-grupo')?.addEventListener('click', criarNovoGrupo);
   document.getElementById('btn-renomear-grupo')?.addEventListener('click', renomearGrupoAtual);
 
@@ -4394,7 +4537,7 @@ function initListeners() {
   document.getElementById('btn-fab-novo-gasto')?.addEventListener('click', () => {
     if (typeof cancelarEdicao === 'function') cancelarEdicao();
     setFormGastoVisivel(true);
-    if (typeof renderPagadorSelect === 'function') renderPagadorSelect();
+    if (typeof renderPagadorSelect === 'function') renderPagadorSelect(true);
     if (typeof renderAreaDivisao === 'function') renderAreaDivisao();
   });
 
@@ -4463,7 +4606,7 @@ function initListeners() {
 
   document.getElementById('btn-abrir-form-gasto')?.addEventListener('click', () => {
     setFormGastoVisivel(true);
-    renderPagadorSelect();
+    renderPagadorSelect(true);
     renderAreaDivisao();
   });
   document.getElementById('btn-cancelar-edicao')?.addEventListener('click', cancelarEdicao);
@@ -4514,8 +4657,9 @@ function initListeners() {
   });
 
   document.getElementById('moeda-gasto')?.addEventListener('change', async (e) => {
+    document.getElementById('taxa-cambio').value='';
     atualizarSeletorMoedaUI();
-    if (e.target.value !== 'BRL') {
+    if (e.target.value !== moedaBase()) {
       await buscarCotacaoMoeda(e.target.value);
     }
     atualizarFeedbackDivisao();
@@ -4523,7 +4667,7 @@ function initListeners() {
 
   document.getElementById('btn-buscar-cotacao')?.addEventListener('click', async () => {
     const moeda = document.getElementById('moeda-gasto')?.value;
-    if (moeda && moeda !== 'BRL') await buscarCotacaoMoeda(moeda);
+    if (moeda && moeda !== moedaBase()) await buscarCotacaoMoeda(moeda);
   });
 
   document.getElementById('taxa-cambio')?.addEventListener('input', () => {
@@ -4560,13 +4704,13 @@ function initListeners() {
     const editId = document.getElementById('edit-gasto-id')?.value || '';
     const desc = document.getElementById('desc-gasto')?.value?.trim() || '';
     const valor = parseFloat(document.getElementById('valor-gasto')?.value) || 0;
-    const moeda = document.getElementById('moeda-gasto')?.value || 'BRL';
+    const moeda = document.getElementById('moeda-gasto')?.value || moedaBase();
     const pagador = document.getElementById('pagador-gasto')?.value || '';
 
     if (!desc || valor <= 0 || !pagador) return;
 
-    let taxaCambio = 1;
-    if (moeda !== 'BRL') {
+    let taxaCambio = getTaxaCambioAtual(moeda);
+    if (moeda !== moedaBase()) {
       taxaCambio = getTaxaCambioAtual(moeda);
       if (!(taxaCambio > 0)) {
         alert(t('invalidRateAlert'));
@@ -4576,10 +4720,13 @@ function initListeners() {
       grupo.taxasCambio[moeda] = taxaCambio;
     }
 
-    const valorBRL = valor * (moeda === 'BRL' ? 1 : taxaCambio);
+    const valorBRL = valor * taxaCambio;
     const eraDesconhecido = grupo.gastos.some(g => g.id === editId && g.pagadorNaoIdentificado);
     const semPagador = eraDesconhecido && pagador === '__splitrao_unknown__';
-    const divisaoObj = eraDesconhecido ? { modoDivisao: 'exato', divisao: semPagador ? {} : { [pagador]: valorBRL }, participantes: semPagador ? [] : [pagador] } : construirDivisaoParaSalvar(valorBRL);
+    const antigoExato=grupo.gastos.find(g=>g.id===editId && g.modoDivisao==='exato');
+    const camposExatos=Array.from(document.querySelectorAll('#area-divisao-dinamica [data-pessoa-custom]'));
+    const exatoIntacto=antigoExato && modoDivisaoAtual==='exato' && antigoExato.valor===valor && antigoExato.moeda===moeda && Math.abs(taxaCambio-taxaExibida(antigoExato,grupo))<=1e-10*Math.abs(taxaCambio) && camposExatos.length>0 && camposExatos.every(i=>i.dataset.valorInicial!==undefined && Number(i.value||0)===Number(i.dataset.valorInicial||0));
+    const divisaoObj = eraDesconhecido ? { modoDivisao: 'exato', divisao: semPagador ? {} : { [pagador]: valorBRL }, participantes: semPagador ? [] : [pagador] } : exatoIntacto ? {modoDivisao:'exato',divisao:divisaoExibida(antigoExato,grupo),participantes:antigoExato.participantes||Object.keys(antigoExato.divisao||{})} : construirDivisaoParaSalvar(valorBRL);
     if (!divisaoObj) return;
 
     const novoGasto = {
@@ -4597,9 +4744,22 @@ function initListeners() {
       ...divisaoObj
     };
 
+    // Salva equivalentes na referência fixa, não na moeda de exibição.
+    const fator = fatorMoeda(grupo);
+    novoGasto.valorBRL /= fator;
+    novoGasto.taxaCambio /= fator;
+    for (const n of Object.keys(novoGasto.divisao || {})) novoGasto.divisao[n] /= fator;
     if (editId) {
       const idx = grupo.gastos.findIndex(g => g.id === editId);
-      if (idx >= 0) grupo.gastos[idx] = novoGasto;
+      if (idx >= 0) {
+        const antigo=grupo.gastos[idx];
+        const perto=(a,b)=>Math.abs(a-b)<=1e-10*Math.max(1,Math.abs(a),Math.abs(b));
+        if (antigo.moeda===novoGasto.moeda && antigo.valor===novoGasto.valor && perto(antigo.taxaCambio,novoGasto.taxaCambio)) {
+          novoGasto.valorBRL=antigo.valorBRL; novoGasto.taxaCambio=antigo.taxaCambio;
+          for (const n of Object.keys(novoGasto.divisao||{})) if (perto(antigo.divisao?.[n],novoGasto.divisao[n])) novoGasto.divisao[n]=antigo.divisao[n];
+        }
+        grupo.gastos[idx] = novoGasto;
+      }
       else grupo.gastos.push(novoGasto);
     } else {
       grupo.gastos.push(novoGasto);
@@ -4613,18 +4773,15 @@ function initListeners() {
     renderTudo();
   });
 
-  document.getElementById('btn-editar-meu-nome')?.addEventListener('click', async () => {
-    setMenu3DotsHomeAberto(false);
-    await atualizarMeuNomeEmTodosOsGrupos();
-  });
 
   document.getElementById('btn-abrir-quitar')?.addEventListener('click', () => abrirModalQuitar());
   document.getElementById('btn-fechar-quitar')?.addEventListener('click', fecharModalQuitar);
   document.getElementById('btn-cancelar-quitar')?.addEventListener('click', fecharModalQuitar);
 
   document.getElementById('quitar-moeda')?.addEventListener('change', async (e) => {
+    document.getElementById('quitar-taxa-cambio').value='';
     atualizarUIQuitarMoeda();
-    if (e.target.value !== 'BRL') {
+    if (e.target.value !== moedaBase()) {
       await buscarCotacaoQuitar();
     }
   });
@@ -4637,7 +4794,7 @@ function initListeners() {
     e.preventDefault();
     const de = document.getElementById('quitar-de')?.value;
     const para = document.getElementById('quitar-para')?.value;
-    const moeda = document.getElementById('quitar-moeda')?.value || 'BRL';
+    const moeda = document.getElementById('quitar-moeda')?.value || moedaBase();
     const valor = parseFloat(document.getElementById('quitar-valor')?.value) || 0;
     const obs = document.getElementById('quitar-obs')?.value?.trim() || '';
     const data = document.getElementById('quitar-data').value;
@@ -4652,8 +4809,8 @@ function initListeners() {
       return;
     }
 
-    const taxaCambio = moeda === 'BRL' ? 1 : getTaxaQuitar();
-    if (moeda !== 'BRL' && !(taxaCambio > 0)) {
+    const taxaCambio = getTaxaQuitar();
+    if (moeda !== moedaBase() && !(taxaCambio > 0)) {
       alert(t('invalidRateAlert'));
       return;
     }
@@ -4667,7 +4824,7 @@ function initListeners() {
       fecharModalQuitar();
       return;
     }
-    if (moeda !== 'BRL' && !edicaoPagamento) {
+    if (moeda !== moedaBase() && !edicaoPagamento) {
       grupo.taxasCambio = grupo.taxasCambio || {};
       grupo.taxasCambio[moeda] = taxaCambio;
     }
@@ -4686,7 +4843,15 @@ function initListeners() {
       data,
       descricao: obs ? t('settlementObsDesc', { obs }) : t('settlementDefaultDesc')
     };
-    if (indice >= 0) grupo.gastos[indice] = registro;
+    registro.valorBRL /= fatorMoeda(grupo);
+    registro.taxaCambio /= fatorMoeda(grupo);
+    if (indice >= 0) {
+      const antigo=grupo.gastos[indice];
+      if (antigo.moeda===registro.moeda && antigo.valor===registro.valor && Math.abs(antigo.taxaCambio-registro.taxaCambio)<=1e-10*Math.max(1,Math.abs(antigo.taxaCambio))) {
+        registro.valorBRL=antigo.valorBRL; registro.taxaCambio=antigo.taxaCambio;
+      }
+      grupo.gastos[indice] = registro;
+    }
     else grupo.gastos.push(registro);
 
     await salvarGrupoNaNuvem(grupo);

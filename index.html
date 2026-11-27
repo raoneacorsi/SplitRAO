@@ -89,7 +89,7 @@
 
       <!-- 02. TELA 1: LISTA DE GRUPOS -->
       <section id="view-lista-grupos" class="app-view">
-        <div id="global-user-banner" class="global-user-banner resumo-divida resumo-quitado hidden" aria-live="polite">
+        <div id="global-user-banner" style="flex-direction:column;text-align:left;align-items:stretch;justify-content:center;gap:4px" class="global-user-banner resumo-divida resumo-quitado hidden" aria-live="polite">
           <span id="global-user-badge" class="resumo-badge"></span>
           <p id="global-user-texto" class="resumo-texto"></p>
         </div>
@@ -110,10 +110,6 @@
                 <button type="button" id="btn-exportar-json" class="dropdown-item">
                   <span>💾</span>
                   <span data-i18n="backupBtn">Backup</span>
-                </button>
-                <button type="button" id="btn-editar-meu-nome" class="dropdown-item">
-                  <span>✏️</span>
-                  <span data-i18n="editMyNameBtn">Alterar meu nome</span>
                 </button>
                 <button type="button" id="btn-multi-invite" class="dropdown-item"><span>👥</span><span data-i18n="multiInvite">Convidar para vários grupos</span></button>
                 <button type="button" id="btn-entrar-codigo-home" class="dropdown-item">
@@ -136,6 +132,7 @@
                   <span>📲</span>
                   <span data-i18n="installApp">Instalar aplicativo</span>
                 </button>
+                <div style="padding:8px 12px;text-align:center;font-size:11px;opacity:.65;pointer-events:none;">SplitRAO · v27.4</div>
               </div>
             </div>
           </div>
@@ -184,6 +181,7 @@
               </button>
 
               <div id="dropdown-3dots" class="dropdown-3dots hidden">
+                <button type="button" id="btn-moeda-grupo" class="dropdown-item"><span>💱</span><span data-i18n="baseCurrency">Moeda padrão</span></button>
                 <button type="button" id="btn-renomear-grupo" class="dropdown-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1L20 7l-4-4L4 15z"/></svg><span data-i18n="renameGroupTitle">Editar nome do grupo</span></button>
                 <button type="button" id="btn-group-my-name" class="dropdown-item"><span>✏️</span><span data-i18n="groupMyName">Alterar meu nome neste grupo</span></button>
                 <button type="button" id="menu-copiar-codigo" class="dropdown-item">
@@ -322,14 +320,14 @@
                   <label for="valor-gasto" data-i18n="totalAmountLabel">Valor Total</label>
                   <div class="currency-input-group">
                     <select id="moeda-gasto" class="currency-select" aria-label="Moeda" data-i18n-aria-label="currencyLabel">
-                      <option value="BRL">BRL (R$)</option>
-                      <option value="USD">USD ($)</option>
-                      <option value="CLP">CLP ($)</option>
-                      <option value="ARS">ARS ($)</option>
-                      <option value="EUR">EUR (€)</option>
-                      <option value="BOB">BOB (Bs)</option>
-                      <option value="PEN">PEN (S/)</option>
-                    </select>
+                      <option value="BRL">BRL</option>
+                      <option value="USD">USD</option>
+                      <option value="CLP">CLP</option>
+                      <option value="ARS">ARS</option>
+                      <option value="EUR">EUR</option>
+                      <option value="BOB">BOB</option>
+                      <option value="PEN">PEN</option>
+                    <option value="GBP">GBP</option><option value="UYU">UYU</option><option value="PYG">PYG</option><option value="AUD">AUD</option><option value="CAD">CAD</option><option value="MXN">MXN</option><option value="JPY">JPY</option><option value="CHF">CHF</option><option value="COP">COP</option></select>
                     <input type="number" id="valor-gasto" step="0.01" min="0.01" placeholder="0,00" required>
                   </div>
                 </div>
@@ -349,8 +347,8 @@
                 </div>
                 <div class="exchange-row">
                   <div class="exchange-input-wrap">
-                    <span>1 <strong id="exchange-curr-code">USD</strong> = R$</span>
-                    <input type="number" id="taxa-cambio" step="0.000001" min="0.000001" placeholder="0,0000">
+                    <span>1 <strong id="exchange-curr-code">USD</strong> = <strong id="exchange-base-code">BRL</strong></span>
+                    <input type="number" id="taxa-cambio" step="any" min="0" placeholder="0,0000">
                   </div>
                   <div class="exchange-converted">
                     <small data-i18n="convertedToBrlLabel">Equivalente no grupo:</small>
@@ -363,7 +361,7 @@
               <div class="form-group">
                 <div class="label-row">
                   <label data-i18n="splitModeLabel">Modo de divisão:</label>
-                  <button type="button" id="btn-todos" class="btn-text" data-i18n="toggleAllBtn">Alternar todos</button>
+                  <button type="button" id="btn-todos" class="btn-text" data-i18n="toggleAllBtn">Selecionar todos</button>
                 </div>
 
                 <div class="split-mode-tabs" id="split-mode-tabs">
@@ -416,6 +414,7 @@
         <div class="modal-body">
           <label id="novo-grupo-label" for="novo-grupo-nome"></label>
           <input type="text" id="novo-grupo-nome" style="width: 100%; margin-top: 10px;" autocomplete="off" required>
+<div id="novo-grupo-moeda-campo" class="form-group"><label data-i18n="baseCurrency">Moeda padrão</label><select id="novo-grupo-moeda" style="width:100%"><option value="BRL">BRL</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="ARS">ARS</option><option value="CLP">CLP</option><option value="BOB">BOB</option><option value="PEN">PEN</option><option value="GBP">GBP</option><option value="UYU">UYU</option><option value="PYG">PYG</option><option value="AUD">AUD</option><option value="CAD">CAD</option><option value="MXN">MXN</option><option value="JPY">JPY</option><option value="CHF">CHF</option><option value="COP">COP</option></select></div>
         </div>
         <div class="modal-footer">
           <button type="button" id="btn-cancelar-novo-grupo" class="btn-secondary" data-i18n="cancelBtn">Cancelar</button>
@@ -521,8 +520,8 @@
   </div>
   <div class="exchange-row">
     <div class="exchange-input-wrap">
-      <span>1 <strong id="quitar-cambio-moeda"></strong> = R$</span>
-      <input type="number" id="quitar-taxa-cambio" min="0.000001" step="any" placeholder="0.00">
+      <span>1 <strong id="quitar-cambio-moeda"></strong> = <strong id="quitar-base-code">BRL</strong></span>
+      <input type="number" id="quitar-taxa-cambio" min="0" step="any" placeholder="0.00">
     </div>
     <div class="exchange-converted">
       <small data-i18n="brlEquivalent">Equivalente em BRL</small>
@@ -686,12 +685,12 @@
   <!-- Modal compartilhado: seleção de grupos, vinculação e nome local. -->
   <div id="modal-v26" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="v26-titulo">
     <div class="modal-box" style="max-width:440px;max-height:85vh;overflow:auto">
-      <div class="modal-header"><h2 id="v26-titulo"></h2></div>
-      <div id="v26-corpo" class="modal-body" style="display:grid;gap:12px"></div>
-      <div class="modal-footer"><button type="button" id="v26-cancelar" class="btn-secondary" data-i18n="cancelBtn">Cancelar</button></div>
+      <div class="modal-header"><h2 id="v26-titulo"></h2><button type="button" id="v26-fechar" class="btn-close" data-i18n-aria-label="closeBtn">×</button></div>
+      <div id="v26-corpo" class="modal-body" style="display:grid;gap:12px;min-width:0"></div>
+      <div class="modal-footer"><button type="button" id="v26-cancelar" class="btn-secondary" data-i18n="cancelBtn">Cancelar</button><button type="button" id="v26-confirmar" class="btn-primary" style="width:auto;margin-top:0"></button></div>
     </div>
   </div>
-  <script type="module" src="app.js?v=26.2"></script>
+  <script type="module" src="app.js?v=27.4"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
