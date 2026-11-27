@@ -960,7 +960,8 @@ async function salvarGrupoNaNuvem(grupo) {
       const snap = await tx.get(groupRef);
       if (!snap.exists() || snap.data().deleted || !membrosReais(snap.data())[currentUser.uid]) throw new Error('Group unavailable');
       const remoto = snap.data();
-      if (JSON.stringify(remoto.vinculos || {}) !== JSON.stringify(grupo.vinculos || {})) throw new Error("Participant links changed; reload group");
+      // Compara os vínculos pelo conteúdo, sem depender da ordem das chaves.
+      if (assinaturaMonetaria(remoto.vinculos || {}) !== assinaturaMonetaria(grupo.vinculos || {})) throw new Error("Participant links changed; reload group");
       if (moedaBase(remoto) !== moedaBase(grupo) || fatorMoeda(remoto) !== fatorMoeda(grupo) || moedaReferencia(remoto) !== moedaReferencia(grupo)) throw new Error("Group currency changed; reload group");
       tx.update(groupRef, payload);
     });
