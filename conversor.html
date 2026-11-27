@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RAODEV • Conversor CSV para SplitRAO</title>
+  <title data-i18n="converterTitle">RAODEV • Conversor CSV para SplitRAO</title>
   <style>
     * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
     body {
@@ -93,38 +93,45 @@
 </head>
 <body>
   <div class="box">
-    <a href="index.html" class="top-link">← Voltar ao SplitRAO</a>
-    <h1>🔄 Conversor Splitwise ➔ SplitRAO</h1>
-    <p>Selecione a planilha CSV exportada do Splitwise para enviar o grupo direto para sua conta.</p>
+    <a href="index.html" class="top-link" data-i18n="converterBack">← Voltar ao SplitRAO</a>
+    <h1 data-i18n="converterHeading">🔄 Conversor Splitwise ➔ SplitRAO</h1>
+    <p data-i18n="converterDesc">Selecione a planilha CSV exportada do Splitwise para enviar o grupo direto para sua conta.</p>
 
     <!-- Etapa 1: Entrada do CSV -->
     <div class="upload-area" id="dropzone">
-      <strong>📂 Clique para escolher o arquivo .CSV</strong>
+      <strong data-i18n="converterChoose">📂 Clique para escolher o arquivo .CSV</strong>
       <input type="file" id="csv-input" accept=".csv" hidden>
     </div>
 
     <!-- Etapa 2: Ajustes e Envio -->
     <div id="painel-config" class="hidden">
       <div class="field">
-        <label for="grupo-nome">Nome do Grupo</label>
+        <label for="grupo-nome" data-i18n="converterGroup">Nome do Grupo</label>
         <input type="text" id="grupo-nome" value="Grupo Importado">
       </div>
 
       <div class="participantes-box">
-        <h3>👥 Participantes do Grupo (edite se necessário)</h3>
+        <h3 data-i18n="converterPeople">👥 Participantes do Grupo (edite se necessário)</h3>
         <div id="mapeamento-nomes"></div>
       </div>
 
       <div id="resumo" class="status"></div>
 
       <div class="acoes-botoes">
-        <button type="button" id="btn-enviar-app">🚀 Importar direto para o SplitRAO</button>
-        <button type="button" id="btn-baixar" class="btn-secundario">💾 Apenas baixar JSON</button>
+        <button type="button" id="btn-enviar-app" data-i18n="converterSend">🚀 Importar direto para o SplitRAO</button>
+        <button type="button" id="btn-baixar" class="btn-secundario" data-i18n="converterDownload">💾 Apenas baixar JSON</button>
       </div>
     </div>
   </div>
 
-  <script>
+  <script type="module">
+    // Reutiliza o idioma salvo pelo aplicativo principal.
+    import { LANG_STORAGE_KEY, createTranslator } from './i18n.js';
+    const { t, getNomeCategoriaTraduzido } = createTranslator(() => localStorage.getItem(LANG_STORAGE_KEY) || 'pt');
+    document.documentElement.lang = localStorage.getItem(LANG_STORAGE_KEY) || 'pt';
+    document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+    document.getElementById('grupo-nome').value = t('converterDefault');
+
     const SPLITWISE_IMPORT_KEY = 'raodev_splitwise_pending_import';
 
     function normalizarTexto(texto) {
@@ -204,7 +211,7 @@
 
     function lerCSV(conteudoTexto, nomeArquivo) {
       const linhas = conteudoTexto.split(/\r?\n/).filter(l => l.trim() !== '');
-      if (linhas.length < 2) return alert('Arquivo CSV vazio.');
+      if (linhas.length < 2) return alert(t('converterEmpty'));
 
       const cabecalho = quebrarLinhaCSV(linhas[0]);
       const pessoas = cabecalho.slice(5);
@@ -288,18 +295,18 @@
 
       mapeamentoNomesDiv.innerHTML = pessoas.map(p => `
         <div class="field">
-          <label>Original: <em>${p}</em></label>
-          <input type="text" class="apelido-input" data-orig="${p}" value="${p.split(' ')[0]}" placeholder="Digite o nome desejado">
+          <label>${t('converterOriginal')} <em>${p}</em></label>
+          <input type="text" class="apelido-input" data-orig="${p}" value="${p.split(' ')[0]}" placeholder="${t('converterName')}">
         </div>
       `).join('');
 
       const resumoCats = Object.entries(contagemCategorias)
-        .map(([cat, qtd]) => `${cat}: ${qtd}`)
+        .map(([cat, qtd]) => `${getNomeCategoriaTraduzido(cat)}: ${qtd}`)
         .join(' • ');
 
       resumoDiv.innerHTML = `
-        <strong>✅ ${lancamentos.length} lançamentos prontos!</strong><br>
-        <small>${resumoCats || 'Apenas pagamentos identificados'}</small>
+        <strong>${t('converterReady', { n: lancamentos.length })}</strong><br>
+        <small>${resumoCats || t('converterPayments')}</small>
       `;
       painelConfig.classList.remove('hidden');
     }
@@ -311,7 +318,7 @@
       });
 
       const grupoId = 'grp_' + Date.now();
-      const nomeGrupo = grupoNomeInput.value.trim() || 'Importado';
+      const nomeGrupo = grupoNomeInput.value.trim() || t('converterImported');
       const pessoasMapeadas = dadosExtraidos.pessoas.map(p => mapaApelidos[p]);
 
       const gastosMapeados = dadosExtraidos.lancamentos.map(item => {

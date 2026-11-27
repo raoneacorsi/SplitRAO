@@ -125,7 +125,6 @@ let categoriaSelecionada = null;
 let categoriaDetectadaAuto = null;
 let filtroCategoriaAtual = 'todas';
 let totaisAberto = false;
-let historicoAberto = false;
 let formGastoAberto = false;
 let menu3DotsAberto = false;
 let menuHome3DotsAberto = false;
@@ -185,8 +184,7 @@ async function aoClicarNovoGastoNaHome() {
   const gruposAtivos = getGruposOrdenados();
 
   if (gruposAtivos.length === 0) {
-    await criarNovoGrupo();
-    const grupoCriado = getGrupoAtivo();
+    const grupoCriado = await criarNovoGrupo();
     if (grupoCriado) {
       abrirTelaDetalheGrupo(grupoCriado.id);
       abrirFormularioDeNovoGasto();
@@ -206,7 +204,7 @@ async function aoClicarNovoGastoNaHome() {
     btn.className = 'picker-group-btn';
 
     const nomeSpan = document.createElement('span');
-    nomeSpan.textContent = grupo.nome || 'Grupo';
+    nomeSpan.textContent = grupo.nome || t('genericGroup');
 
     const setaSpan = document.createElement('span');
     setaSpan.className = 'picker-group-chevron';
@@ -1154,7 +1152,7 @@ function renderAuthUI() {
     loggedBox?.classList.remove('hidden');
     const rotulo = currentUserName
       ? `${currentUserName} (${currentUser.email || 'Conta'})`
-      : (currentUser.email || currentUser.displayName || 'Usuário');
+      : (currentUser.email || currentUser.displayName || t('genericUser'));
     if (displayEmail) displayEmail.textContent = rotulo;
     if (avatar) {
       if (currentUser.photoURL) {
@@ -1176,16 +1174,16 @@ function renderAuthUI() {
 function traduzirErroAuth(err) {
   const code = err?.code || '';
   const mapa = {
-    'auth/invalid-email': 'E-mail inválido.',
-    'auth/user-not-found': 'Nenhuma conta encontrada com este e-mail.',
-    'auth/wrong-password': 'Senha incorreta.',
-    'auth/invalid-credential': 'E-mail ou senha inválidos.',
-    'auth/email-already-in-use': 'Este e-mail já está cadastrado.',
-    'auth/weak-password': 'A senha deve ter pelo menos 6 caracteres.',
-    'auth/popup-closed-by-user': 'Login cancelado antes de concluir.',
-    'auth/network-request-failed': 'Erro de rede. Verifique sua conexão.'
+    'auth/invalid-email': t('authInvalidEmail'),
+    'auth/user-not-found': t('authUserNotFound'),
+    'auth/wrong-password': t('authWrongPassword'),
+    'auth/invalid-credential': t('authInvalidCredential'),
+    'auth/email-already-in-use': t('authEmailInUse'),
+    'auth/weak-password': t('authWeakPassword'),
+    'auth/popup-closed-by-user': t('authPopupClosed'),
+    'auth/network-request-failed': t('authNetwork')
   };
-  return mapa[code] || err?.message || 'Erro na autenticação.';
+  return mapa[code] || t('authGeneric');
 }
 
 async function aplicarPersistenciaEscolhida() {
@@ -1334,6 +1332,10 @@ function aplicarIdiomaNaInterface() {
     const key = el.dataset.i18nTitle;
     const trad = t(key);
     if (trad) el.title = trad;
+  });
+
+  document.querySelectorAll('[data-i18n-aria-label]').forEach(el => {
+    el.setAttribute('aria-label', t(el.dataset.i18nAriaLabel));
   });
 
   atualizarBandeiraAtualUI();
@@ -1668,8 +1670,45 @@ async function trocarGrupoAtivo(novoId, { abrirDetalhe = false } = {}) {
   }
 }
 
+// Solicita um nome usando o mesmo padrão visual dos demais modais.
+function solicitarNomeNovoGrupo({ perfil = false } = {}) {
+  const modal = document.getElementById('modal-novo-grupo');
+  const form = document.getElementById('form-novo-grupo');
+  const input = document.getElementById('novo-grupo-nome');
+  const focoAnterior = document.activeElement;
+  document.getElementById('novo-grupo-titulo').textContent = t(perfil ? 'nameLabel' : 'newGroupFull');
+  document.getElementById('novo-grupo-label').textContent = t(perfil ? 'askMyNamePrompt' : 'newGroupPrompt');
+  document.getElementById('btn-confirmar-novo-grupo').textContent = t(perfil ? 'confirmNameBtn' : 'createGroupBtn');
+  input.value = '';
+  modal.classList.remove('hidden');
+  input.focus();
+  return new Promise(resolve => {
+    const fechar = valor => {
+      modal.classList.add('hidden');
+      form.removeEventListener('submit', enviar);
+      modal.removeEventListener('click', clicar);
+      document.removeEventListener('keydown', teclado);
+      focoAnterior?.focus();
+      resolve(valor);
+    };
+    const enviar = e => {
+      e.preventDefault();
+      if (input.value.trim()) fechar(input.value.trim());
+    };
+    const clicar = e => {
+      if (e.target === modal || ['btn-fechar-novo-grupo', 'btn-cancelar-novo-grupo'].includes(e.target.id)) fechar(null);
+    };
+    const teclado = e => {
+      if (e.key === 'Escape') { e.preventDefault(); fechar(null); }
+    };
+    form.addEventListener('submit', enviar);
+    modal.addEventListener('click', clicar);
+    document.addEventListener('keydown', teclado);
+  });
+}
+
 async function criarNovoGrupo() {
-  const nome = prompt(t('newGroupPrompt'));
+  const nome = await solicitarNomeNovoGrupo();
   if (!nome || !nome.trim()) return;
   const id = gerarId('grp');
   const novoGrupo = criarGrupoPadrao(id, nome.trim());
@@ -1677,7 +1716,7 @@ async function criarNovoGrupo() {
 
   let nomeUsuario = getNomeUsuarioEfetivo();
   if (!nomeUsuario) {
-    const perguntado = prompt(t('askMyNamePrompt'));
+    const perguntado = await solicitarNomeNovoGrupo({ perfil: true });
     if (perguntado && perguntado.trim()) {
       nomeUsuario = perguntado.trim();
       await persistirNomeNoPerfil(nomeUsuario);
@@ -1699,6 +1738,7 @@ async function criarNovoGrupo() {
   }
   assinarGrupoAtivo(id);
   abrirTelaDetalheGrupo(id);
+  return novoGrupo;
 }
 
 async function renomearGrupoAtual() {
@@ -1710,11 +1750,46 @@ async function renomearGrupoAtual() {
   renderTudo();
 }
 
+// Exibe as opções de saída e mantém a confirmação explícita para exclusão global.
+function solicitarAcaoSaidaGrupo(grupo, confirmarExclusao = false) {
+  const modal = document.getElementById('modal-sair-grupo');
+  const opcoes = document.getElementById('sair-grupo-opcoes');
+  const confirmar = document.getElementById('btn-confirmar-excluir-todos');
+  const cancelar = document.getElementById('btn-cancelar-sair-grupo');
+  const focoAnterior = document.activeElement;
+  document.getElementById('sair-grupo-titulo').textContent = t(confirmarExclusao ? 'deleteEveryoneBtn' : 'leaveDeleteBtn');
+  document.getElementById('sair-grupo-texto').textContent = t(confirmarExclusao ? 'deleteGroupConfirm' : 'leaveGroupModalText', { name: grupo.nome });
+  opcoes.classList.toggle('hidden', confirmarExclusao);
+  confirmar.classList.toggle('hidden', !confirmarExclusao);
+  modal.classList.remove('hidden');
+  cancelar.focus();
+  return new Promise(resolve => {
+    const fechar = valor => {
+      modal.classList.add('hidden');
+      modal.removeEventListener('click', clicar);
+      document.removeEventListener('keydown', teclado);
+      focoAnterior?.focus();
+      resolve(valor);
+    };
+    const clicar = e => {
+      const id = e.target.id;
+      if (e.target === modal || ['btn-fechar-sair-grupo', 'btn-cancelar-sair-grupo'].includes(id)) fechar(null);
+      else if (!confirmarExclusao && id === 'btn-apenas-sair') fechar('1');
+      else if (!confirmarExclusao && id === 'btn-excluir-todos') fechar('2');
+      else if (confirmarExclusao && id === 'btn-confirmar-excluir-todos') fechar(true);
+    };
+    const teclado = e => {
+      if (e.key === 'Escape') { e.preventDefault(); fechar(null); }
+    };
+    modal.addEventListener('click', clicar);
+    document.addEventListener('keydown', teclado);
+  });
+}
+
 async function excluirOuSairDoGrupo() {
   const grupo = getGrupoAtivo();
-  const escolha = prompt(t('deleteGroupPrompt', { name: grupo.nome }));
-  if (!escolha) return;
-  const op = escolha.trim();
+  const op = await solicitarAcaoSaidaGrupo(grupo);
+  if (!op) return;
 
   if (op === '1') {
     if (currentUser) {
@@ -1741,7 +1816,7 @@ async function excluirOuSairDoGrupo() {
     assinarGrupoAtivo(state.grupoAtivoId);
     abrirTelaListaGrupos();
   } else if (op === '2') {
-    if (!confirm(t('deleteGroupConfirm', { name: grupo.nome }))) return;
+    if (!await solicitarAcaoSaidaGrupo(grupo, true)) return;
     if (currentUser) {
       try {
         await setDoc(getGroupDocRef(grupo.id), {
@@ -1925,7 +2000,7 @@ function renderListaPessoas() {
     btnRem.type = 'button';
     btnRem.className = 'tag-remove';
     btnRem.textContent = '×';
-    btnRem.title = 'Remover';
+    btnRem.title = t('removeLabel');
     btnRem.addEventListener('click', () => removerParticipante(pessoa));
 
     tag.appendChild(btnRem);
@@ -2461,7 +2536,7 @@ async function apagarLancamento(id) {
 
   const labelItem = itemRemovido.tipo === 'pagamento'
     ? `${itemRemovido.de || '?'} → ${itemRemovido.para || '?'}`
-    : (itemRemovido.descricao || 'Lançamento');
+    : (itemRemovido.descricao || t('genericEntry'));
 
   const toast = document.getElementById('toast-undo');
   const msgEl = document.getElementById('toast-undo-msg');
@@ -2749,8 +2824,6 @@ function renderHistorico() {
   const grupo = getGrupoAtivo();
   const ul = document.getElementById('lista-gastos');
   const badgeTotal = document.getElementById('total-grupo-badge');
-  const btnToggle = document.getElementById('btn-toggle-historico');
-  const containerHist = document.getElementById('container-historico');
 
   const despesas = (grupo.gastos || []).filter(g => g.tipo !== 'pagamento');
   const totalDespesasBRL = despesas.reduce((acc, g) => acc + getValorEmBRL(g), 0);
@@ -2758,13 +2831,6 @@ function renderHistorico() {
   if (badgeTotal) {
     badgeTotal.textContent = formatMoney(totalDespesasBRL, 'BRL');
   }
-
-  if (btnToggle) {
-    btnToggle.textContent = historicoAberto
-      ? t('collapseHistorySimpleBtn')
-      : t('viewHistorySimpleBtn');
-  }
-  containerHist?.classList.toggle('hidden', !historicoAberto);
 
   if (!ul) return;
   ul.innerHTML = '';
@@ -2889,7 +2955,6 @@ function renderPainelTotais() {
 
   const totalGrupo = despesasGrupo.reduce((acc, g) => acc + getValorEmBRL(g), 0);
   const totalFiltro = despesasFiltradas.reduce((acc, g) => acc + getValorEmBRL(g), 0);
-  const mediaFiltro = despesasFiltradas.length > 0 ? totalFiltro / despesasFiltradas.length : 0;
 
   const porCat = {};
   const porMes = {};
@@ -2937,14 +3002,10 @@ function renderPainelTotais() {
     }).join('');
 
   conteudo.innerHTML = `
-    <div class="totais-resumo-cards">
+    <div class="totais-resumo-cards" style="grid-template-columns: 1fr;">
       <div class="total-mini-card">
         <small>${escapeHTML(filtroCategoriaAtual === 'todas' ? t('groupTotalCard') : t('activeFilterTotalCard'))}</small>
         <strong>${escapeHTML(formatMoney(filtroCategoriaAtual === 'todas' ? totalGrupo : totalFiltro, 'BRL'))}</strong>
-      </div>
-      <div class="total-mini-card">
-        <small>${escapeHTML(t('avgExpenseCard'))}</small>
-        <strong>${escapeHTML(formatMoney(mediaFiltro, 'BRL'))}</strong>
       </div>
     </div>
     <div class="totais-bloco">
@@ -3808,7 +3869,7 @@ async function importarBackupJSON(file) {
   } catch (e) {
     console.error('Erro ao importar arquivo:', e);
     setSaveStatus('statusSaveError');
-    alert(`Erro ao importar arquivo: ${e?.message || 'formato inválido ou sem permissão na nuvem'}`);
+    alert(t('importError', { detail: t('importErrorDetail') }));
   } finally {
     setTimeout(() => {
       isSavingCloud = false;
@@ -3982,7 +4043,7 @@ function initListeners() {
     desfazerExclusaoLancamento();
   });
   document.getElementById('btn-importar-splitwise')?.addEventListener('click', () => {
-    setMenu3DotsAberto(false);
+    setMenu3DotsHomeAberto(false);
     window.location.href = 'conversor.html';
   });
   document.getElementById('btn-fab-novo-gasto')?.addEventListener('click', () => {
@@ -4265,11 +4326,6 @@ function initListeners() {
     renderTudo();
   });
 
-  document.getElementById('btn-toggle-historico')?.addEventListener('click', () => {
-    historicoAberto = !historicoAberto;
-    renderHistorico();
-  });
-
   document.getElementById('filtro-categoria')?.addEventListener('change', (e) => {
     filtroCategoriaAtual = e.target.value;
     renderHistorico();
@@ -4391,8 +4447,7 @@ function initListeners() {
 
   document.getElementById('btn-escolher-novo-grupo-gasto')?.addEventListener('click', async () => {
     fecharModalEscolherGrupoGasto();
-    await criarNovoGrupo();
-    const grupoCriado = getGrupoAtivo();
+    const grupoCriado = await criarNovoGrupo();
     if (grupoCriado) {
       abrirTelaDetalheGrupo(grupoCriado.id);
       abrirFormularioDeNovoGasto();

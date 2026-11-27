@@ -699,6 +699,167 @@ export const I18N = {
   }
 };
 
+
+// Textos adicionais da interface e do conversor.
+Object.assign(I18N.pt, {
+  "pageTitle": "SplitRAO • Gestão de Despesas",
+  "installApp": "Instalar aplicativo",
+  "installMobile": "📲 Instalar aplicativo no celular",
+  "mainGroup": "Grupo Principal",
+  "chooseGroup": "Escolher grupo",
+  "chooseGroupDesc": "Em qual grupo você quer registrar o novo gasto?",
+  "newGroupFull": "+ Novo grupo",
+  "amountLabel": "Valor",
+  "settleExchange": "Cotação (1 moeda em BRL)",
+  "fetchExchange": "↻ Buscar cotação",
+  "brlEquivalent": "Equivalente em BRL",
+  "expenseReport": "Relatório de Despesas",
+  "languageLabel": "Idioma",
+  "optionsLabel": "Opções",
+  "homeMenu": "Menu inicial",
+  "changeGroupImage": "Alterar imagem do grupo",
+  "optionsMenu": "Menu de opções",
+  "currencyLabel": "Moeda",
+  "removeLabel": "Remover",
+  "genericGroup": "Grupo",
+  "genericUser": "Usuário",
+  "genericEntry": "Lançamento",
+  "authInvalidEmail": "E-mail inválido.",
+  "authUserNotFound": "Nenhuma conta encontrada com este e-mail.",
+  "authWrongPassword": "Senha incorreta.",
+  "authInvalidCredential": "E-mail ou senha inválidos.",
+  "authEmailInUse": "Este e-mail já está cadastrado.",
+  "authWeakPassword": "A senha deve ter pelo menos 6 caracteres.",
+  "authPopupClosed": "Login cancelado antes de concluir.",
+  "authNetwork": "Erro de rede. Verifique sua conexão.",
+  "authGeneric": "Erro na autenticação.",
+  "importError": "Erro ao importar arquivo: {detail}",
+  "importErrorDetail": "formato inválido ou sem permissão na nuvem",
+  "converterTitle": "RAODEV • Conversor CSV para SplitRAO",
+  "converterBack": "← Voltar ao SplitRAO",
+  "converterHeading": "🔄 Conversor Splitwise ➔ SplitRAO",
+  "converterDesc": "Selecione a planilha CSV exportada do Splitwise para enviar o grupo direto para sua conta.",
+  "converterChoose": "📂 Clique para escolher o arquivo .CSV",
+  "converterGroup": "Nome do Grupo",
+  "converterDefault": "Grupo Importado",
+  "converterPeople": "👥 Participantes do Grupo (edite se necessário)",
+  "converterSend": "🚀 Importar direto para o SplitRAO",
+  "converterDownload": "💾 Apenas baixar JSON",
+  "converterEmpty": "Arquivo CSV vazio.",
+  "converterOriginal": "Original:",
+  "converterName": "Digite o nome desejado",
+  "converterReady": "✅ {n} lançamentos prontos!",
+  "converterPayments": "Apenas pagamentos identificados",
+  "converterImported": "Importado"
+});
+Object.assign(I18N.en, {
+  "pageTitle": "SplitRAO • Expense Management",
+  "installApp": "Install app",
+  "installMobile": "📲 Install app on your phone",
+  "mainGroup": "Main Group",
+  "chooseGroup": "Choose group",
+  "chooseGroupDesc": "Which group should the new expense be added to?",
+  "newGroupFull": "+ New group",
+  "amountLabel": "Amount",
+  "settleExchange": "Exchange rate (1 currency unit in BRL)",
+  "fetchExchange": "↻ Get exchange rate",
+  "brlEquivalent": "Equivalent in BRL",
+  "expenseReport": "Expense Report",
+  "languageLabel": "Language",
+  "optionsLabel": "Options",
+  "homeMenu": "Home menu",
+  "changeGroupImage": "Change group image",
+  "optionsMenu": "Options menu",
+  "currencyLabel": "Currency",
+  "removeLabel": "Remove",
+  "genericGroup": "Group",
+  "genericUser": "User",
+  "genericEntry": "Entry",
+  "authInvalidEmail": "Invalid email.",
+  "authUserNotFound": "No account found with this email.",
+  "authWrongPassword": "Incorrect password.",
+  "authInvalidCredential": "Invalid email or password.",
+  "authEmailInUse": "This email is already registered.",
+  "authWeakPassword": "Password must be at least 6 characters.",
+  "authPopupClosed": "Sign-in was cancelled.",
+  "authNetwork": "Network error. Check your connection.",
+  "authGeneric": "Authentication error.",
+  "importError": "Error importing file: {detail}",
+  "importErrorDetail": "invalid format or insufficient cloud permissions",
+  "converterTitle": "RAODEV • CSV to SplitRAO Converter",
+  "converterBack": "← Back to SplitRAO",
+  "converterHeading": "🔄 Splitwise ➔ SplitRAO Converter",
+  "converterDesc": "Select the CSV exported from Splitwise to send the group directly to your account.",
+  "converterChoose": "📂 Click to choose the CSV file",
+  "converterGroup": "Group Name",
+  "converterDefault": "Imported Group",
+  "converterPeople": "👥 Group Members (edit if needed)",
+  "converterSend": "🚀 Import directly into SplitRAO",
+  "converterDownload": "💾 Download JSON only",
+  "converterEmpty": "Empty CSV file.",
+  "converterOriginal": "Original:",
+  "converterName": "Enter the desired name",
+  "converterReady": "✅ {n} entries ready!",
+  "converterPayments": "Only payments identified",
+  "converterImported": "Imported"
+});
+Object.assign(I18N.es, {
+  "pageTitle": "SplitRAO • Gestión de Gastos",
+  "installApp": "Instalar aplicación",
+  "installMobile": "📲 Instalar aplicación en el móvil",
+  "mainGroup": "Grupo Principal",
+  "chooseGroup": "Elegir grupo",
+  "chooseGroupDesc": "¿En qué grupo quieres registrar el nuevo gasto?",
+  "newGroupFull": "+ Nuevo grupo",
+  "amountLabel": "Importe",
+  "settleExchange": "Tipo de cambio (1 unidad en BRL)",
+  "fetchExchange": "↻ Buscar tipo de cambio",
+  "brlEquivalent": "Equivalente en BRL",
+  "expenseReport": "Informe de gastos",
+  "languageLabel": "Idioma",
+  "optionsLabel": "Opciones",
+  "homeMenu": "Menú principal",
+  "changeGroupImage": "Cambiar imagen del grupo",
+  "optionsMenu": "Menú de opciones",
+  "currencyLabel": "Moneda",
+  "removeLabel": "Eliminar",
+  "genericGroup": "Grupo",
+  "genericUser": "Usuario",
+  "genericEntry": "Registro",
+  "authInvalidEmail": "Correo electrónico no válido.",
+  "authUserNotFound": "No se encontró ninguna cuenta con este correo.",
+  "authWrongPassword": "Contraseña incorrecta.",
+  "authInvalidCredential": "Correo o contraseña no válidos.",
+  "authEmailInUse": "Este correo ya está registrado.",
+  "authWeakPassword": "La contraseña debe tener al menos 6 caracteres.",
+  "authPopupClosed": "Se canceló el inicio de sesión.",
+  "authNetwork": "Error de red. Comprueba tu conexión.",
+  "authGeneric": "Error de autenticación.",
+  "importError": "Error al importar archivo: {detail}",
+  "importErrorDetail": "formato no válido o permisos insuficientes en la nube",
+  "converterTitle": "RAODEV • Conversor CSV a SplitRAO",
+  "converterBack": "← Volver a SplitRAO",
+  "converterHeading": "🔄 Conversor Splitwise ➔ SplitRAO",
+  "converterDesc": "Selecciona el CSV exportado de Splitwise para enviar el grupo directamente a tu cuenta.",
+  "converterChoose": "📂 Haz clic para elegir el archivo CSV",
+  "converterGroup": "Nombre del grupo",
+  "converterDefault": "Grupo importado",
+  "converterPeople": "👥 Participantes del grupo (edita si es necesario)",
+  "converterSend": "🚀 Importar directamente a SplitRAO",
+  "converterDownload": "💾 Solo descargar JSON",
+  "converterEmpty": "Archivo CSV vacío.",
+  "converterOriginal": "Original:",
+  "converterName": "Introduce el nombre deseado",
+  "converterReady": "✅ ¡{n} registros listos!",
+  "converterPayments": "Solo se identificaron pagos",
+  "converterImported": "Importado"
+});
+
+// Textos do modal de criação de grupo.
+Object.assign(I18N.pt, { createGroupBtn: 'Criar grupo', confirmNameBtn: 'Confirmar' });
+Object.assign(I18N.en, { createGroupBtn: 'Create group', confirmNameBtn: 'Confirm' });
+Object.assign(I18N.es, { createGroupBtn: 'Crear grupo', confirmNameBtn: 'Confirmar' });
+
 export function createTranslator(getLang) {
   function t(chave, vars = {}) {
     const lang = getLang();
@@ -725,3 +886,19 @@ export function createTranslator(getLang) {
 
   return { t, getNomeCategoriaTraduzido };
 }
+// Modal de saída e exclusão de grupo.
+Object.assign(I18N.pt, {
+  leaveOnlyBtn: 'Apenas sair',
+  deleteEveryoneBtn: 'Excluir para todos',
+  leaveGroupModalText: 'Grupo "{name}":\n• Apenas sair: remove o grupo do seu aparelho, mantendo-o na nuvem para os amigos.\n• Excluir para todos: exclui definitivamente o grupo da nuvem para todos.'
+});
+Object.assign(I18N.en, {
+  leaveOnlyBtn: 'Just leave',
+  deleteEveryoneBtn: 'Delete for everyone',
+  leaveGroupModalText: 'Group "{name}":\n• Just leave: removes the group from your device, keeping it in the cloud for friends.\n• Delete for everyone: permanently deletes the group from the cloud for everyone.'
+});
+Object.assign(I18N.es, {
+  leaveOnlyBtn: 'Solo salir',
+  deleteEveryoneBtn: 'Eliminar para todos',
+  leaveGroupModalText: 'Grupo "{name}":\n• Solo salir: elimina el grupo de tu dispositivo, manteniéndolo en la nube para los demás.\n• Eliminar para todos: elimina definitivamente el grupo de la nube para todos.'
+});

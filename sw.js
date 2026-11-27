@@ -1,10 +1,10 @@
-const CACHE_NAME = 'splitrao-v12';
+const CACHE_NAME = 'splitrao-v18';
 const ASSETS = [
   './',
   './index.html',
   './conversor.html',
   './style.css',
-  './app.js?v=12',
+  './app.js?v=18',
   './i18n.js',
   './categorias-keywords.js',
   './manifest.json'
