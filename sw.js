@@ -1,11 +1,11 @@
 // 01. Versão e arquivos do cache
-const CACHE_NAME = 'splitrao-v28.6';
+const CACHE_NAME = 'splitrao-v30';
 const ASSETS = [
   './',
   './index.html',
   './conversor.html',
   './style.css',
-  './app.js?v=28.6',
+  './app.js?v=30',
   './i18n.js',
   './categorias-keywords.js',
   './manifest.json'

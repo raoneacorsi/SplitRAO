@@ -32,12 +32,10 @@
             </div>
           </div>
 
-            <!-- 03. Menu de 3 tracinhos da Tela Inicial -->
+            <!-- 03. Menu global de configurações -->
             <div class="menu-3dots-wrap" id="menu-3dots-home-wrap">
-              <button type="button" id="btn-menu-3dots-home" class="btn-3dots" aria-expanded="false" aria-label="Menu inicial" data-i18n-aria-label="homeMenu" title="Opções" data-i18n-title="optionsLabel">
-                <span></span>
-                <span></span>
-                <span></span>
+              <button type="button" id="btn-menu-3dots-home" class="btn-3dots" aria-expanded="false" aria-label="Menu geral" data-i18n-aria-label="homeMenu" title="Opções" data-i18n-title="optionsLabel">
+                <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2h4l.6 2.6 2 .9 2.3-1.4 2.8 2.8-1.4 2.3.9 2L24 12l-2.8 1-.9 2 1.4 2.3-2.8 2.8-2.3-1.4-2 .9L14 22h-4l-.6-2.4-2-.9-2.3 1.4-2.8-2.8 1.4-2.3-.9-2L0 12l2.8-1 .9-2-1.4-2.3 2.8-2.8 2.3 1.4 2-.9z" transform="translate(1 1) scale(.9167)"/><circle cx="12" cy="12" r="3"/></svg>
               </button>
 
               <div id="dropdown-3dots-home" class="dropdown-3dots hidden">
@@ -61,9 +59,11 @@
                 </button>
                 <button type="button" id="btn-exportar-json" class="dropdown-item">
                   <span>💾</span>
-                  <span data-i18n="backupBtn">Backup</span>
+                  <span data-i18n="backupBtn">Backup geral</span>
                 </button>
-                <div style="padding:8px 12px;text-align:center;font-size:11px;opacity:.65;pointer-events:none;">SplitRAO · v28.6</div>
+                <button type="button" id="btn-restaurar-backup" class="dropdown-item"><span>📂</span><span data-i18n="restoreBackup">Restaurar backup</span></button>
+                <button type="button" id="btn-logout-menu" class="dropdown-item danger"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 17l5-5-5-5m5 5H3m9-9h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7"/></svg><span data-i18n="logoutBtn">Sair</span></button>
+                <div style="padding:8px 12px;text-align:center;font-size:11px;opacity:.65;pointer-events:none;">SplitRAO · v30</div>
               </div>
             </div>
         </div>
@@ -143,6 +143,8 @@
                   <span id="menu-codigo-label"><span data-i18n="copyCodeMenuLabel">Copiar código</span> (<code id="menu-codigo-valor">---</code>)</span>
                 </button>
                 <div class="dropdown-divider"></div>
+                <button type="button" id="btn-exportar-csv" class="dropdown-item"><span>📊</span><span data-i18n="exportExpenses">Exportar despesas (CSV)</span></button>
+                <button type="button" id="btn-backup-grupo" class="dropdown-item"><span>💾</span><span data-i18n="groupBackup">Backup do grupo</span></button>
                 <button type="button" id="btn-excluir-grupo" class="dropdown-item danger">
                   <span>🚪</span>
                   <span data-i18n="leaveDeleteBtn">Sair/Excluir</span>
@@ -228,6 +230,7 @@
       </section>
 
       <!-- 12. Input oculto compartilhado para importar JSON -->
+      <input type="file" id="input-restaurar-backup" accept=".json,application/json" hidden>
       <input type="file" id="input-importar-json" accept=".json" hidden>
 
     </div>
@@ -237,7 +240,7 @@
       <div class="modal-gasto-box">
         <section class="card" id="card-form-gasto">
           <div id="container-form-gasto" class="hidden">
-            <div class="card-header-between" style="margin-bottom: 16px;">
+            <div class="card-header-between" style="display:block;width:max-content;margin:0 0 16px auto;">
               <h2 id="titulo-form-gasto" data-i18n="sec2TitleNew">Registrar Novo Gasto</h2>
               <div style="display: flex; gap: 6px; align-items: center;">
                 <button type="button" id="btn-cancelar-edicao" class="btn-danger-ghost hidden" data-i18n="cancelEditBtn">Cancelar Edição</button>
@@ -375,6 +378,15 @@
           <button type="submit" id="btn-confirmar-novo-grupo" class="btn-primary" style="width: auto; margin-top: 0;"></button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Modal de ingresso por código ou link -->
+  <div id="modal-entrar-codigo" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="entrar-codigo-titulo">
+    <div class="modal-box" style="max-width:440px;">
+      <div class="modal-header"><h2 id="entrar-codigo-titulo" data-i18n="joinCodeTitle">Entrar em um grupo</h2><button type="button" id="btn-fechar-entrar-codigo" class="btn-close" data-i18n-aria-label="closeBtn">×</button></div>
+      <form id="form-entrar-codigo"><div class="modal-body"><label for="entrar-codigo-input" data-i18n="enterCodePrompt">Cole o código ou link completo:</label><input id="entrar-codigo-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" required style="width:100%;margin-top:10px;"></div>
+      <div class="modal-footer"><button type="button" id="btn-cancelar-entrar-codigo" class="btn-secondary" data-i18n="cancelBtn">Cancelar</button><button type="submit" class="btn-primary" style="width:auto;margin-top:0" data-i18n="joinCodeSubmit">Entrar</button></div></form>
     </div>
   </div>
 
@@ -521,8 +533,8 @@
 
   <!-- 21. Tela de Login -->
   <div id="auth-gate" class="auth-gate-screen hidden">
-    <div class="auth-gate-card">
-      <div class="lang-dropdown" id="lang-switcher-gate" style="margin-bottom: 16px;">
+    <div class="auth-gate-frame">
+      <div class="lang-dropdown" id="lang-switcher-gate">
         <button type="button" class="lang-current-btn" aria-expanded="false" aria-haspopup="listbox" title="Idioma" data-i18n-title="languageLabel">
           <span class="lang-current-flag"></span>
           <span class="lang-caret">▾</span>
@@ -567,6 +579,8 @@
         </div>
       </div>
 
+    <div class="auth-gate-card">
+      <button type="button" id="btn-instalar-app-gate" class="btn-secondary hidden auth-install-top" data-i18n="installMobile">Instalar Aplicativo</button>
       <img src="icon-512.png" alt="SplitRAO" class="logo-badge brand-icon-img" style="margin: 0 auto 12px; display: flex;">
       <h1 style="text-align: center; font-size: 1.65rem; color: #0c4a6e;">SplitRAO</h1>
       <p style="text-align: center; font-size: 0.88rem; color: var(--text-muted); margin: 6px 0 20px;" data-i18n="authModalDesc">
@@ -578,7 +592,7 @@
         <span data-i18n="continueGoogleBtn">Continuar com Google</span>
       </button>
 
-      <div class="auth-divider"><span data-i18n="orEmailDivider">ou com e-mail e senha</span></div>
+      <div class="auth-divider" id="auth-divider-login"><span data-i18n="orEmailDivider">ou com e-mail e senha</span></div>
 
       <div class="auth-tabs" id="auth-mode-tabs">
         <button type="button" class="auth-tab active" data-auth-mode="login" data-i18n="authTabLogin">Entrar</button>
@@ -587,6 +601,12 @@
 
       <div id="auth-feedback" class="auth-feedback hidden"></div>
 
+      <div id="auth-verification" class="hidden auth-verification">
+        <p data-i18n="verifyPending">Confirme seu e-mail antes de acessar o aplicativo.</p>
+        <button type="button" class="btn-primary" id="auth-check" data-i18n="verifyCheck">Já confirmei meu e-mail</button>
+        <button type="button" class="btn-secondary" id="auth-resend" data-i18n="verifyResend">Reenviar e-mail</button>
+        <button type="button" class="btn-text" id="auth-verification-exit" data-i18n="logoutBtn">Sair</button>
+      </div>
       <form id="form-auth">
         <div id="auth-name-group" class="form-group hidden">
           <label for="auth-name" data-i18n="nameLabel">Seu Nome (para a função "Eu")</label>
@@ -603,9 +623,14 @@
             <label for="auth-password" data-i18n="passwordLabel">Senha</label>
             <button type="button" id="btn-reset-senha" class="btn-text" data-i18n="forgotPassBtn">Esqueci a senha</button>
           </div>
-          <input type="password" id="auth-password" autocomplete="current-password" placeholder="••••••••" minlength="6" required>
+          <div class="auth-password-wrap"><input type="password" id="auth-password" autocomplete="current-password" placeholder="••••••••" minlength="6" required><button type="button" class="auth-eye" data-password-toggle="auth-password" aria-pressed="false" aria-label="Mostrar senha" data-i18n-aria-label="showPassword"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path class="eye-slash" d="M3 3l18 18"/></svg></button></div>
         </div>
 
+        <div id="auth-confirm-group" class="form-group hidden">
+          <label for="auth-confirm-password" data-i18n="confirmPassword">Confirmar senha</label>
+          <div class="auth-password-wrap"><input type="password" id="auth-confirm-password" autocomplete="new-password" minlength="6" disabled><button type="button" class="auth-eye" data-password-toggle="auth-confirm-password" aria-pressed="false" aria-label="Mostrar senha" data-i18n-aria-label="showPassword"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path class="eye-slash" d="M3 3l18 18"/></svg></button></div>
+        </div>
+        <ul id="auth-password-rules" class="password-rules hidden" aria-live="polite"><li data-rule="length"><span class="password-rule-mark" aria-hidden="true">○</span> <span data-i18n="passwordRuleLength">Mínimo de 6 caracteres</span></li><li data-rule="letter"><span class="password-rule-mark" aria-hidden="true">○</span> <span data-i18n="passwordRuleLetter">Pelo menos uma letra</span></li><li data-rule="number"><span class="password-rule-mark" aria-hidden="true">○</span> <span data-i18n="passwordRuleNumber">Pelo menos um número</span></li><li data-rule="match"><span class="password-rule-mark" aria-hidden="true">○</span> <span data-i18n="passwordRuleMatch">As senhas coincidem</span></li></ul>
         <label class="remember-row">
           <input type="checkbox" id="chk-manter-conectado" checked>
           <span data-i18n="keepSignedInLabel">Manter-me conectado neste aparelho</span>
@@ -613,12 +638,12 @@
 
         <button type="submit" id="btn-submit-auth" class="btn-primary" data-i18n="authSubmitLoginBtn">Entrar na Conta</button>
 
-        <button type="button" id="btn-instalar-app-gate" class="btn-secondary hidden" style="width: 100%; margin-top: 12px;" data-i18n="installMobile">
-          📲 Instalar aplicativo no celular
-        </button>
+
       </form>
     </div>
   </div>
+
+  </div> <!-- faixa central de autenticação -->
 
   <!-- 22. Toast de Desfazer Exclusão -->
   <div id="toast-undo" class="toast-undo hidden" role="status" aria-live="polite">
@@ -669,6 +694,7 @@
         <div class="form-group"><label for="conta-senha-atual" data-i18n="accountCurrentPassword">Senha atual</label><input id="conta-senha-atual" type="password" autocomplete="current-password" required></div>
         <div class="form-group"><label for="conta-senha-nova" data-i18n="accountNewPassword">Nova senha</label><input id="conta-senha-nova" type="password" autocomplete="new-password" minlength="6" required></div>
         <div class="form-group"><label for="conta-senha-repetir" data-i18n="accountRepeatPassword">Repita a nova senha</label><input id="conta-senha-repetir" type="password" autocomplete="new-password" minlength="6" required></div>
+        <ul id="account-password-rules" class="password-rules" aria-live="polite"><li data-rule="length"><span class="password-rule-mark" aria-hidden="true">○</span> <span data-i18n="passwordRuleLength">Mínimo de 6 caracteres</span></li><li data-rule="letter"><span class="password-rule-mark" aria-hidden="true">○</span> <span data-i18n="passwordRuleLetter">Pelo menos uma letra</span></li><li data-rule="number"><span class="password-rule-mark" aria-hidden="true">○</span> <span data-i18n="passwordRuleNumber">Pelo menos um número</span></li><li data-rule="match"><span class="password-rule-mark" aria-hidden="true">○</span> <span data-i18n="passwordRuleMatch">As senhas coincidem</span></li></ul>
         <p id="conta-senha-status" role="status" class="conta-status"></p>
       </div><div class="modal-footer"><button type="button" id="conta-senha-cancelar" class="btn-secondary" data-i18n="cancelBtn">Cancelar</button><button type="submit" id="conta-senha-salvar" class="btn-primary" style="width:auto;margin-top:0" data-i18n="accountSave">Salvar alterações</button></div></form>
     </div>
@@ -686,7 +712,13 @@
       </div><div class="modal-footer"><button type="button" id="conta-excluir-cancelar" class="btn-secondary" data-i18n="cancelBtn">Cancelar</button><button type="submit" id="conta-excluir-confirmar" class="btn-primary conta-excluir-confirmar" data-i18n="accountDelete">Excluir conta</button></div></form>
     </div>
   </div>
-  <script type="module" src="app.js?v=28.6"></script>
+  <!-- Instalação do PWA: instruções quando o navegador não oferece prompt nativo -->
+  <dialog id="modal-instalar-pwa" class="install-dialog" aria-labelledby="install-title">
+    <div class="modal-header"><h2 id="install-title" data-i18n="installMobile">Instalar Aplicativo</h2><button type="button" class="btn-close" id="install-close" data-i18n-aria-label="closeBtn" aria-label="Fechar">×</button></div>
+    <div class="modal-body install-steps" id="install-steps"></div>
+    <div class="modal-footer"><button type="button" class="btn-secondary" id="install-ok" data-i18n="closeBtn">Fechar</button></div>
+  </dialog>
+  <script type="module" src="app.js?v=30"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

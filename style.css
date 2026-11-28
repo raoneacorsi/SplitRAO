@@ -2151,3 +2151,41 @@ select:focus {
 /* v28.5 — Menu no cabeçalho e atalho do balanço global */
 .top-utility-bar #menu-3dots-home-wrap { margin-left: auto; }
 .btn-globo-home { font-size: 19px; line-height: 1; }
+
+/* v29 — ajustes exclusivos da tela de autenticação */
+.auth-install-top { width:100%; margin:0 0 18px; border:1px solid var(--primary); color:var(--primary); font-weight:600; }
+.auth-password-wrap { position:relative; }
+.auth-password-wrap input { width:100%; padding-right:48px; }
+.auth-eye { position:absolute; right:4px; top:50%; transform:translateY(-50%); width:40px; height:40px; display:grid; place-items:center; border:0; background:transparent; color:var(--text-muted); cursor:pointer; }
+.auth-eye .eye-slash { display:none; }
+.auth-eye[aria-pressed="true"] .eye-slash { display:block; }
+.auth-verification { display:grid; gap:12px; }
+
+/* v29.1 — destaque da instalação e idioma no canto da tela de login. */
+#auth-gate { position:relative; padding-top:12px; }
+#auth-gate .auth-gate-frame { width:100%; max-width:680px; margin:auto; }
+#auth-gate #lang-switcher-gate { display:table; margin:0 0 12px auto; z-index:81; }
+#auth-gate .auth-gate-card { margin:0 auto; }
+#auth-gate .auth-install-top { background:var(--primary-hover); color:#fff; border-color:var(--primary-hover); font-weight:700; font-size:1rem; padding:14px 16px; }
+#auth-gate .auth-install-top:hover { background:#075985; }
+#auth-resend:disabled { opacity:.6; cursor:not-allowed; }
+
+/* v29.2 — cabeçalho global e instalação */
+.app-wrapper { padding-top: max(6px, env(safe-area-inset-top)); }
+.top-utility-bar { margin-bottom:8px; flex-wrap:nowrap; gap:6px; }
+.top-utility-bar .auth-bar { min-width:0; }
+.top-utility-bar .user-pill { max-width:100%; }
+#user-display-email { min-width:0; }
+#btn-menu-3dots-home { color:var(--text); }
+.install-dialog { position:fixed; inset:0; margin:auto; width:calc(100% - 32px); max-width:410px; max-height:90vh; overflow:auto; border:0; border-radius:16px; background:var(--surface); color:var(--text); box-shadow:var(--shadow); }
+.install-dialog::backdrop { background:rgba(15,23,42,.55); }
+.install-steps { display:grid; gap:16px; }
+.install-step { display:flex; align-items:center; gap:12px; text-align:left; }
+.install-step-icon { flex:0 0 44px; height:44px; display:grid; place-items:center; border-radius:10px; background:var(--primary-light); color:var(--primary-hover); }
+
+/* Indicadores de requisitos de novas senhas */
+.password-rules { list-style:none; padding:0; margin:8px 0 12px; font-size:12px; color:var(--text-muted,#64748b); }
+.password-rules li { margin:4px 0; }
+.password-rules .rule-ok { color:#15803d; }
+.conta-escura .password-rules .rule-ok { color:#86efac; }
+.password-rule-mark { display:inline-block; width:16px; font-weight:700; }

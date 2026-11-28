@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import {
   getFirestore,
   doc,
-  getDoc,
+  getDoc, getDocFromServer,
   setDoc,
   onSnapshot,
   runTransaction, FieldPath, deleteField
@@ -14,7 +14,7 @@ import {
   GoogleAuthProvider,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
+  sendPasswordResetEmail, sendEmailVerification, reload, getIdToken,
   signOut,
   updateProfile,
   EmailAuthProvider, reauthenticateWithCredential, updatePassword, reauthenticateWithPopup, deleteUser,
@@ -197,6 +197,7 @@ function fecharModalPeloVoltar() {
   const botoes = {
     'modal-form-gasto': 'btn-fechar-form-gasto',
     'modal-escolher-grupo-gasto': 'btn-fechar-escolher-grupo',
+    'modal-entrar-codigo': 'btn-fechar-entrar-codigo',
     'modal-novo-grupo': 'btn-fechar-novo-grupo',
     'modal-sair-grupo': 'btn-fechar-sair-grupo',
     'modal-convite': 'btn-fechar-convite',
@@ -236,7 +237,7 @@ function abrirTelaDetalheGrupo(groupId, viaHistorico = false) {
     else history.pushState(novoEstado, '', location.href);
   }
   telaAtiva = 'detalhe';
-  document.getElementById('menu-3dots-home-wrap')?.classList.add('hidden');
+  document.getElementById('menu-3dots-home-wrap')?.classList.remove('hidden');
   setMenu3DotsHomeAberto(false);
   document.getElementById('view-lista-grupos')?.classList.add('hidden');
   document.getElementById('view-detalhe-grupo')?.classList.remove('hidden');
@@ -780,8 +781,7 @@ async function garantirPerfilUsuarioNaNuvem(user) {
   const userRef = getUserProfileRef(user.uid);
   const snap = await getDoc(userRef);
 
-  const nomeSalvoLocal = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
-  const nomeEfetivo = nomeSalvoLocal || user.displayName || user.email?.split('@')[0] || '';
+  const nomeEfetivo = user.displayName || user.email?.split('@')[0] || '';
   if (nomeEfetivo && !currentUserName) {
     salvarNomeUsuarioLocal(nomeEfetivo);
   }
@@ -818,7 +818,7 @@ async function garantirPerfilUsuarioNaNuvem(user) {
     ? data.activeGroupId
     : (groupIds[0] || null);
 
-  const nomeNuvem = data.displayName || user.displayName || nomeSalvoLocal || '';
+  const nomeNuvem = data.displayName || nomeEfetivo;
   if (nomeNuvem) {
     salvarNomeUsuarioLocal(nomeNuvem);
   }
@@ -1269,6 +1269,23 @@ function mostrarFeedbackAuth(msg, tipo = 'err') {
   box.className = `auth-feedback ${tipo}`;
 }
 
+// Validação de novas senhas, sem restringir o login de contas existentes.
+function requisitosSenha(senha) {
+  return { length: Array.from(senha).length >= 6, letter: /\p{L}/u.test(senha), number: /[0-9]/.test(senha) };
+}
+function senhaNovaValida(senha) { return Object.values(requisitosSenha(senha)).every(Boolean); }
+function atualizarRequisitosSenha(listaId, senhaId, confirmId) {
+  const senha = document.getElementById(senhaId).value;
+  const confirm = document.getElementById(confirmId).value;
+  const regras = { ...requisitosSenha(senha), match: senha.length > 0 && senha === confirm };
+  document.querySelectorAll(`#${listaId} [data-rule]`).forEach(item => {
+    const ok = regras[item.dataset.rule];
+    item.classList.toggle('rule-ok', ok);
+    item.querySelector('.password-rule-mark').textContent = ok ? '✓' : '○';
+  });
+}
+function atualizarRequisitosCadastro() { atualizarRequisitosSenha('auth-password-rules','auth-password','auth-confirm-password'); }
+function atualizarRequisitosConta() { atualizarRequisitosSenha('account-password-rules','conta-senha-nova','conta-senha-repetir'); }
 function setModoAuth(novoModo) {
   authMode = novoModo;
   document.querySelectorAll('#auth-mode-tabs .auth-tab').forEach(btn => {
@@ -1284,13 +1301,82 @@ function setModoAuth(novoModo) {
   }
   if (nameInput) {
     nameInput.required = isRegister;
+    nameInput.disabled = !isRegister;
+    if (!isRegister) nameInput.value = '';
   }
 
   const btnSubmit = document.getElementById('btn-submit-auth');
   if (btnSubmit) {
     btnSubmit.textContent = isRegister ? t('authSubmitRegisterBtn') : t('authSubmitLoginBtn');
   }
+  const confirm = document.getElementById('auth-confirm-password');
+  document.getElementById('auth-confirm-group').classList.toggle('hidden', !isRegister);
+  document.getElementById('auth-password-rules').classList.toggle('hidden', !isRegister);
+  confirm.required = isRegister;
+  confirm.disabled = !isRegister;
+  if (!isRegister) confirm.value = '';
+  atualizarRequisitosCadastro();
+  document.getElementById('btn-reset-senha').classList.toggle('hidden', isRegister);
+  document.getElementById('auth-password').autocomplete = isRegister ? 'new-password' : 'current-password';
   mostrarFeedbackAuth('');
+}
+
+// Contas anteriores ao lançamento ficam dispensadas da verificação.
+const EMAIL_VERIFICATION_CUTOFF = Date.parse('2026-11-28T01:56:00Z');
+function precisaVerificarEmail(user) {
+  if (!user || user.emailVerified) return false;
+  const created = Date.parse(user.metadata.creationTime || '');
+  return !Number.isFinite(created) || created >= EMAIL_VERIFICATION_CUTOFF;
+}
+function mostrarVerificacao(user) {
+  const pending = precisaVerificarEmail(user);
+  for (const id of ['form-auth','auth-mode-tabs','btn-login-google','auth-divider-login']) {
+    document.getElementById(id).classList.toggle('hidden', pending);
+  }
+  document.getElementById('auth-verification').classList.toggle('hidden', !pending);
+  atualizarBotaoVerificacao();
+}
+// Intervalo local por UID, persistido para sobreviver ao recarregamento.
+let verificacaoEnviando = false;
+let verificacaoTimer = null;
+const verificacaoPrazos = new Map();
+function prazoVerificacao(user) {
+  if (!user) return 0;
+  let salvo = 0;
+  try { salvo = Number(localStorage.getItem('splitrao_verify_until_' + user.uid)) || 0; } catch {}
+  return Math.max(salvo, verificacaoPrazos.get(user.uid) || 0);
+}
+function iniciarPrazoVerificacao(user) {
+  const prazo = Date.now() + 60000;
+  verificacaoPrazos.set(user.uid, prazo);
+  try { localStorage.setItem('splitrao_verify_until_' + user.uid, String(prazo)); } catch {}
+}
+function atualizarBotaoVerificacao() {
+  clearTimeout(verificacaoTimer);
+  const user = auth.currentUser;
+  const btn = document.getElementById('auth-resend');
+  const segundos = Math.max(0, Math.ceil((prazoVerificacao(user) - Date.now()) / 1000));
+  btn.disabled = verificacaoEnviando || segundos > 0 || !user;
+  btn.textContent = t('verifyResend') + (segundos ? ` (${segundos}s)` : '');
+  if (segundos && precisaVerificarEmail(user)) verificacaoTimer = setTimeout(atualizarBotaoVerificacao, 250);
+}
+async function enviarVerificacao(user) {
+  if (verificacaoEnviando || prazoVerificacao(user) > Date.now()) return;
+  verificacaoEnviando = true;
+  atualizarBotaoVerificacao();
+  try {
+    auth.languageCode = currentLang;
+    await sendEmailVerification(user);
+    iniciarPrazoVerificacao(user);
+    mostrarFeedbackAuth(t('verifySent'), 'ok');
+  } catch (err) {
+    if (['auth/too-many-requests','auth/quota-exceeded'].includes(err?.code)) iniciarPrazoVerificacao(user);
+    console.warn('Falha no envio de verificação:', err?.code);
+    throw err;
+  } finally {
+    verificacaoEnviando = false;
+    atualizarBotaoVerificacao();
+  }
 }
 
 function renderAuthUI() {
@@ -1334,7 +1420,9 @@ function traduzirErroAuth(err) {
     'auth/email-already-in-use': t('authEmailInUse'),
     'auth/weak-password': t('authWeakPassword'),
     'auth/popup-closed-by-user': t('authPopupClosed'),
-    'auth/network-request-failed': t('authNetwork')
+    'auth/network-request-failed': t('authNetwork'),
+    'auth/too-many-requests': t('verifyRateLimit'),
+    'auth/quota-exceeded': t('verifyRateLimit')
   };
   return mapa[code] || t('authGeneric');
 }
@@ -1346,16 +1434,41 @@ async function aplicarPersistenciaEscolhida() {
 }
 
 function initAuthListeners() {
+  for (const id of ['auth-password','auth-confirm-password']) document.getElementById(id).addEventListener('input', atualizarRequisitosCadastro);
+  document.querySelectorAll('[data-password-toggle]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const field = document.getElementById(btn.dataset.passwordToggle);
+      const visible = field.type === 'password';
+      field.type = visible ? 'text' : 'password';
+      btn.setAttribute('aria-pressed', String(visible));
+      btn.setAttribute('aria-label', t(visible ? 'hidePassword' : 'showPassword'));
+      btn.dataset.i18nAriaLabel = visible ? 'hidePassword' : 'showPassword';
+    });
+  });
+  document.getElementById('auth-resend').addEventListener('click', async () => {
+    try { if (auth.currentUser) await enviarVerificacao(auth.currentUser); }
+    catch (err) { mostrarFeedbackAuth(traduzirErroAuth(err)); }
+  });
+  document.getElementById('auth-check').addEventListener('click', async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+    const btn = document.getElementById('auth-check');
+    btn.disabled = true;
+    try {
+      await reload(user);
+      if (precisaVerificarEmail(user)) mostrarFeedbackAuth(t('verifyPending'));
+      else { await getIdToken(user, true); await processarSessaoAuth(user); }
+    } catch (err) { mostrarFeedbackAuth(traduzirErroAuth(err)); }
+    finally { btn.disabled = false; }
+  });
+  document.getElementById('auth-verification-exit').addEventListener('click', () => signOut(auth).catch(err => mostrarFeedbackAuth(traduzirErroAuth(err))));
+
   document.querySelectorAll('#auth-mode-tabs .auth-tab').forEach(btn => {
     btn.addEventListener('click', () => setModoAuth(btn.dataset.authMode));
   });
 
   document.getElementById('btn-login-google')?.addEventListener('click', async () => {
     mostrarFeedbackAuth('');
-    const nomeCadastro = authMode === 'register'
-      ? (document.getElementById('auth-name')?.value?.trim() || '')
-      : '';
-    if (nomeCadastro) salvarNomeUsuarioLocal(nomeCadastro);
 
     try {
       await aplicarPersistenciaEscolhida();
@@ -1387,6 +1500,8 @@ function initAuthListeners() {
     const senha = document.getElementById('auth-password')?.value || '';
     if (!email || !senha) return;
     if (isRegister && !nomeCadastro) return;
+    if (isRegister && !senhaNovaValida(senha)) { mostrarFeedbackAuth(t('passwordPolicyError')); return; }
+    if (isRegister && senha !== document.getElementById('auth-confirm-password').value) { mostrarFeedbackAuth(t('passwordMismatch')); return; }
 
     mostrarFeedbackAuth('');
 
@@ -1395,10 +1510,10 @@ function initAuthListeners() {
       if (!isRegister) {
         await signInWithEmailAndPassword(auth, email, senha);
       } else {
-        salvarNomeUsuarioLocal(nomeCadastro);
         const cred = await createUserWithEmailAndPassword(auth, email, senha);
         if (cred.user) {
           await updateProfile(cred.user, { displayName: nomeCadastro });
+          await enviarVerificacao(cred.user);
         }
       }
     } catch (err) {
@@ -1418,31 +1533,35 @@ function initAuthListeners() {
     await signOut(auth);
   });
 
-  onAuthStateChanged(auth, async (user) => {
+  onAuthStateChanged(auth, processarSessaoAuth);
+}
+
+async function processarSessaoAuth(user) {
     contaPrefs = {};
     contaSessao++;
     contaEl('modal-conta').classList.add('hidden');
     contaEl('modal-conta-senha').classList.add('hidden');
     contaEl('modal-conta-excluir').classList.add('hidden');
     contaEl('conta-excluir-form').reset();
+    mostrarVerificacao(user);
+    if (precisaVerificarEmail(user)) {
+      currentUser = null;
+      renderAuthUI();
+      return;
+    }
     currentUser = user || null;
     if (currentUser) {
-      if (authMode === 'register') {
-        const nomeCadastro = document.getElementById('auth-name')?.value?.trim();
-        if (nomeCadastro) salvarNomeUsuarioLocal(nomeCadastro);
-      }
-      renderAuthUI();
+      // Não exibir nem persistir nomes de outra sessão antes de carregar o perfil.
+      salvarNomeUsuarioLocal(currentUser.displayName || currentUser.email?.split('@')[0] || '');
       setSaveStatus('statusConnecting');
       try {
         const userData = await garantirPerfilUsuarioNaNuvem(currentUser);
         await carregarGruposDoUsuario(userData);
         contaAplicarPerfil(userData);
+        renderAuthUI();
         assinarPerfilUsuario(currentUser.uid);
         await processarConviteDaURL();
         await processarImportacaoPendenteSplitwise();
-        if (currentUserName) {
-          await persistirNomeNoPerfil(currentUserName);
-        }
       } catch (e) {
         console.error('Erro ao inicializar dados do usuário:', e);
         setSaveStatus('statusOffline');
@@ -1452,7 +1571,6 @@ function initAuthListeners() {
       renderAuthUI();
       setSaveStatus('statusOffline');
     }
-  });
 }
 
 // ===== 09. INTERNACIONALIZAÇÃO (I18N) =====
@@ -1503,6 +1621,7 @@ function aplicarIdiomaNaInterface() {
   atualizarBandeiraAtualUI();
 
   setModoAuth(authMode);
+  atualizarBotaoVerificacao();
   atualizarLabelDataGasto();
   atualizarDataQuitacao();
   atualizarSeletorMoedaUI();
@@ -2131,8 +2250,35 @@ function compartilharConviteGrupo(linkPersonalizado = null) {
   compartilhar.addEventListener('click', enviarLink);
 }
 
+// Solicita código sem usar a janela nativa do navegador.
+function solicitarCodigoGrupo() {
+  const modal = document.getElementById('modal-entrar-codigo');
+  const form = document.getElementById('form-entrar-codigo');
+  const input = document.getElementById('entrar-codigo-input');
+  const foco = document.activeElement;
+  input.value = '';
+  modal.classList.remove('hidden');
+  input.focus();
+  return new Promise(resolve => {
+    const fechar = valor => {
+      modal.classList.add('hidden');
+      form.removeEventListener('submit', enviar);
+      modal.removeEventListener('click', clicar);
+      document.removeEventListener('keydown', teclado);
+      foco?.focus();
+      resolve(valor);
+    };
+    const enviar = e => { e.preventDefault(); if (input.value.trim()) fechar(input.value.trim()); };
+    const clicar = e => { if (e.target === modal || e.target.closest('#btn-fechar-entrar-codigo, #btn-cancelar-entrar-codigo')) fechar(null); };
+    const teclado = e => { if (e.key === 'Escape') { e.preventDefault(); fechar(null); } };
+    form.addEventListener('submit', enviar);
+    modal.addEventListener('click', clicar);
+    document.addEventListener('keydown', teclado);
+  });
+}
 async function entrarPorCodigoOuLink() {
-  const raw = prompt(t('enterCodePrompt'))?.trim();
+  if (!currentUser) return;
+  const raw = await solicitarCodigoGrupo();
   if (!raw || !currentUser) return;
   try {
     const params = raw.includes('?') ? new URL(raw, location.href).searchParams : new URLSearchParams({grupo: /^[a-hj-np-z2-9]{8}$/i.test(raw) ? raw.toUpperCase() : raw});
@@ -2227,7 +2373,7 @@ function camposParticipante(corpo, nomes) {
 }
 
 // Confirma identidades de todos os grupos antes de gravar qualquer importação.
-async function selecionarParticipantesImportacao(grupos) {
+async function selecionarParticipantesImportacao(grupos, restauracao = false) {
   return modalSelecao(t('importParticipantTitle'), (corpo, fechar) => {
     const campos = grupos.map(grupo => {
       const titulo = document.createElement('h3'); titulo.textContent = grupo.nome; corpo.append(titulo);
@@ -2236,7 +2382,13 @@ async function selecionarParticipantesImportacao(grupos) {
       const label = document.createElement('label'); label.textContent=t('baseCurrency'); label.append(moeda); corpo.append(label);
       const labelTaxa=document.createElement('label'); labelTaxa.append(taxa); corpo.append(labelTaxa);
       const atualizar=()=>{labelTaxa.hidden=moeda.value===moedaBase(grupo); labelTaxa.firstChild===taxa && labelTaxa.prepend(document.createTextNode('')); labelTaxa.firstChild.textContent=`1 ${moedaBase(grupo)} = ${moeda.value} `; taxa.value=labelTaxa.hidden?'1':'';}; moeda.onchange=atualizar; atualizar();
-      return {grupo, moeda, taxa, ...camposParticipante(corpo, grupo.pessoas)};
+      const campos = camposParticipante(corpo, grupo.pessoas);
+      if (restauracao) {
+        label.hidden = true; labelTaxa.hidden = true;
+        const atualizarNome = campos.select.onchange;
+        campos.select.onchange = () => { atualizarNome(); if (grupo.pessoas.includes(campos.select.value)) campos.input.value = campos.select.value; };
+      }
+      return {grupo, moeda, taxa, ...campos};
     });
     botaoV26(corpo, t('importParticipantConfirm'), () => {
       for (const {grupo,select,input,moeda,taxa} of campos) {
@@ -3908,21 +4060,93 @@ function abrirModalGlobal() {
 }
 
 // ===== 19. BACKUP E IMPORTAÇÃO (PADRÃO + SPLITWISE) =====
-function exportarBackupJSON() {
-  const payload = {
-    app: 'SplitRAO',
-    version: 8,
-    exportedAt: new Date().toISOString(),
-    userName: currentUserName,
-    state
-  };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `splitrao-backup-${getTodayISO()}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+// 19.1. Exportação de backups e lançamentos
+function baixarArquivoV30(conteudo, tipo, nome) {
+  const url = URL.createObjectURL(new Blob([conteudo], {type: tipo}));
+  const a = document.createElement('a'); a.href = url; a.download = nome;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+function nomeArquivoV30(nome) { return String(nome || 'grupo').replace(/[^\p{L}\p{N}_-]+/gu, '-').slice(0,80); }
+function montarBackupV30(grupos, ativo, escopo) {
+  return {app:'SplitRAO', version:30, scope:escopo, exportedAt:new Date().toISOString(), userName:currentUserName,
+    state:{grupoAtivoId:ativo, grupos}};
+}
+async function exportarBackupJSON(individual = false) {
+  try {
+    if (isSavingCloud) throw new Error(t('backupBusy'));
+    const ativo = state.grupoAtivoId, usuario = currentUser;
+    let grupos = {};
+    if (usuario) {
+      const perfil = await getDocFromServer(getUserProfileRef(usuario.uid));
+      const ids = perfil.data()?.groupIds || [];
+      if (individual && !ids.includes(ativo)) throw new Error(t('backupInvalid'));
+      for (const id of individual ? [ativo] : [...new Set(ids)]) {
+        const snap = await getDocFromServer(getGroupDocRef(id));
+        if (!snap.exists() || !membrosReais(snap.data())[usuario.uid]) throw new Error(t('backupInvalid'));
+        grupos[id] = normalizarEstruturaGrupo(id, snap.data());
+      }
+      if (currentUser?.uid !== usuario.uid) throw new Error(t('backupInvalid'));
+    } else grupos = individual ? {[ativo]:getGrupoAtivo()} : state.grupos;
+    if (!Object.keys(grupos).length) throw new Error(t('backupInvalid'));
+    const payload = montarBackupV30(grupos, grupos[ativo] ? ativo : Object.keys(grupos)[0], individual?'group':'general');
+    baixarArquivoV30(JSON.stringify(payload,null,2),'application/json',`splitrao-backup-${individual?nomeArquivoV30(grupos[ativo].nome):'geral'}-${getTodayISO()}.json`);
+  } catch(e) { alert(t('importError',{detail:e.message})); }
+}
+// Uma linha por participante; totais aparecem somente na primeira linha do lançamento.
+function montarCSVV30(grupo) {
+  const chaves = ['csvDate','csvType','csvDescription','csvCategory','csvPayer','csvParticipant','csvDebtor','csvCreditor','csvOriginal','csvOriginalCurrency','csvRate','csvBaseCurrency','csvConverted','csvShare','csvDebt','csvSettlement','csvNotes','csvId'];
+  const sep = currentLang === 'en' ? ',' : ';';
+  const num = v => Number.isFinite(v) ? String(v).replace('.',currentLang==='en'?'.':',') : '';
+  // Protege textos contra fórmulas executadas por planilhas.
+  const cel = v => { let x=String(v??''); if(typeof v==='string' && /^[\s]*[=+@-]/.test(x) && !/^-?\d+(?:[.,]\d+)?$/.test(x)) x="'"+x; return '"'+x.replace(/"/g,'""')+'"'; };
+  const linhas = [chaves.map(k=>t(k))];
+  for (const g of ordenarLancamentosPorData(grupo.gastos)) {
+    const total = getValorEmBRL(g,grupo), base = moedaBase(grupo), moeda = g.moeda || moedaReferencia(grupo);
+    const taxa = Number(g.taxaCambio || 1)*fatorMoeda(grupo);
+    const comum = [g.data,g.tipo==='pagamento'?t('csvPayment'):t('csvExpense'),g.descricao||'',g.categoria||''];
+    const fim = [g.obs||g.observacoes||'',g.id||''];
+    if(g.tipo==='pagamento') {
+      const {de,para}=extrairPartesPagamento(g);
+      linhas.push([...comum,de,para,'','',num(g.valor),moeda,num(taxa),base,'','','',num(total),...fim]);
+      continue;
+    }
+    const pagador=g.pagadorNaoIdentificado?'':g.pagador||'';
+    const partes=Object.entries(g.divisao||{}); if(!partes.length) partes.push(['',null]);
+    partes.forEach(([p,v],i)=>{
+      const cota=v===null?null:Number(v)*fatorMoeda(grupo);
+      const deve=pagador && p && p!==pagador && cota>0;
+      linhas.push([...comum,pagador,p,deve?p:'',deve?pagador:'',i?'':num(g.valor),moeda,num(taxa),base,i?'':num(total),num(cota),pagador&&p?num(deve?cota:0):'','',...fim]);
+    });
+  }
+  return '\uFEFF'+linhas.map(l=>l.map(cel).join(sep)).join('\r\n');
+}
+function exportarDespesasCSV() {
+  const grupo=getGrupoAtivo(); if(!grupo)return;
+  baixarArquivoV30(montarCSVV30(grupo),'text/csv;charset=utf-8',`splitrao-${nomeArquivoV30(grupo.nome)}-${getTodayISO()}.csv`);
+}
+// 19.2. Validação e confirmação antes de restaurar cópias.
+function validarBackupV30(parsed) {
+  if(parsed?.app !== 'SplitRAO' || !parsed.state?.grupos || typeof parsed.state.grupos !== 'object') throw new Error(t('backupInvalid'));
+  const entradas=extrairGruposDeJSON(parsed);
+  if(Array.isArray(parsed.state.grupos) && entradas.length!==parsed.state.grupos.length) throw new Error(t('backupInvalid'));
+  if(!entradas.length || entradas.some(({gdata:g})=>!g || typeof g.nome!=='string' || !Array.isArray(g.pessoas) || !Array.isArray(g.gastos) || g.pessoas.some(p=>typeof p!=='string') || g.gastos.some(x=>!x || typeof x!=='object' || (x.valor===null || x.valor===undefined || x.valor==='' || !Number.isFinite(Number(x.valor))) || (x.divisao && Object.values(x.divisao).some(v=>!Number.isFinite(Number(v))))))) throw new Error(t('backupInvalid'));
+  return entradas;
+}
+async function restaurarBackupV30(file) {
+  if(!file || isSavingCloud)return;
+  try {
+    const entradas=validarBackupV30(JSON.parse((await file.text()).replace(/^\uFEFF/,'')));
+    const ok=await modalSelecao(t('restoreBackup'),(corpo,fechar)=>{
+      const p=document.createElement('p'); p.textContent=t('backupConfirm'); corpo.append(p);
+      const ul=document.createElement('ul'); for(const {gdata} of entradas){const li=document.createElement('li');li.textContent=gdata.nome;ul.append(li);} corpo.append(ul);
+      botaoV26(corpo,t('restoreBackup'),()=>fechar(true));
+    });
+    if(!ok)return;
+    isSavingCloud=true; setSaveStatus('statusSaving');
+    try { const id=await persistirGruposImportados(entradas,{novoCodigo:true,restauracao:true}); if(!id && id!==false)throw new Error(t('backupInvalid')); setSaveStatus('statusSyncedAt',{time:new Date().toLocaleTimeString()}); }
+    finally {isSavingCloud=false;}
+  } catch(e){setSaveStatus('statusSaveError');alert(t('importError',{detail:e.message}));}
 }
 
 function normalizarDataFlexivel(dataRaw) {
@@ -4286,7 +4510,7 @@ function extrairGruposDeJSON(parsed) {
   return [];
 }
 
-async function persistirGruposImportados(entradas, { novoCodigo = false } = {}) {
+async function persistirGruposImportados(entradas, { novoCodigo = false, restauracao = false } = {}) {
   if (!Array.isArray(entradas) || entradas.length === 0) return null;
 
   let primeiroIdNovo = null;
@@ -4295,7 +4519,7 @@ async function persistirGruposImportados(entradas, { novoCodigo = false } = {}) 
   // Importações e backups criam cópias independentes, sem substituir grupos ativos.
   if (currentUser) {
     const grupos = entradas.map(({gdata}) => normalizarEstruturaGrupo(gdata.id || '', gdata));
-    escolhas = await selecionarParticipantesImportacao(grupos);
+    escolhas = await selecionarParticipantesImportacao(grupos, restauracao);
     if (!escolhas) return false;
   }
 
@@ -4486,7 +4710,11 @@ function initListeners() {
     e.stopPropagation();
   });
 
-  // Menu de 3 tracinhos (Tela Inicial / Lista de Grupos)
+  // Menu global (lista e detalhes dos grupos)
+  document.getElementById('btn-logout-menu')?.addEventListener('click', () => {
+    setMenu3DotsHomeAberto(false);
+    document.getElementById('btn-logout')?.click();
+  });
   document.getElementById('btn-menu-3dots-home')?.addEventListener('click', (e) => {
     e.stopPropagation();
     setMenu3DotsHomeAberto(!menuHome3DotsAberto);
@@ -4646,6 +4874,11 @@ function initListeners() {
     setMenu3DotsHomeAberto(false);
     exportarBackupJSON();
   });
+
+  document.getElementById('btn-backup-grupo')?.addEventListener('click',()=>{setMenu3DotsAberto(false);exportarBackupJSON(true);});
+  document.getElementById('btn-exportar-csv')?.addEventListener('click',()=>{setMenu3DotsAberto(false);exportarDespesasCSV();});
+  document.getElementById('btn-restaurar-backup')?.addEventListener('click',()=>{setMenu3DotsHomeAberto(false);document.getElementById('input-restaurar-backup').click();});
+  document.getElementById('input-restaurar-backup')?.addEventListener('change',e=>{const f=e.target.files?.[0];e.target.value='';restaurarBackupV30(f);});
 
   document.getElementById('input-importar-json')?.addEventListener('change', (e) => {
     setMenu3DotsAberto(false);
@@ -4974,67 +5207,76 @@ function initListeners() {
 
   // ==================== INSTALAÇÃO DO PWA ====================
   let deferredInstallPrompt = null;
+  let instalacaoConfirmada = false;
+  let instalacaoEmCurso = false;
+  const modoStandalone = window.matchMedia('(display-mode: standalone)');
+  const dialogInstalar = document.getElementById('modal-instalar-pwa');
 
   function isAppStandalone() {
-    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    return modoStandalone.matches || window.navigator.standalone === true;
   }
-
-  function isAndroidDevice() {
-    return /android/i.test(window.navigator.userAgent);
-  }
-
   function isIOSDevice() {
-    return /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+    return /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+      (/Mac/i.test(navigator.platform || '') && navigator.maxTouchPoints > 1);
   }
-
   function sincronizarBotoesInstalar() {
-    const jaInstalado = isAppStandalone();
-    const deveMostrar = !jaInstalado;
-
+    const ocultar = isAppStandalone() || instalacaoConfirmada;
     ['btn-instalar-app', 'btn-instalar-app-home', 'btn-instalar-app-gate'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.classList.toggle('hidden', !deveMostrar);
+      document.getElementById(id)?.classList.toggle('hidden', ocultar);
     });
   }
-
-  window.addEventListener('beforeinstallprompt', (e) => {
+  window.addEventListener('beforeinstallprompt', e => {
     e.preventDefault();
     deferredInstallPrompt = e;
     sincronizarBotoesInstalar();
   });
-
   window.addEventListener('appinstalled', () => {
     deferredInstallPrompt = null;
+    instalacaoConfirmada = true;
     sincronizarBotoesInstalar();
   });
+  modoStandalone.addEventListener?.('change', sincronizarBotoesInstalar);
 
+  // Instruções localizadas, sem dependências externas.
+  function mostrarInstrucoesInstalacao() {
+    const tipo = isIOSDevice() ? 'ios' : /android/i.test(navigator.userAgent) ? 'android' : 'desktop';
+    const passos = tipo === 'ios' ? ['installIOS1','installIOS2','installIOS3'] :
+      tipo === 'android' ? ['installAndroid1','installAndroid2'] : ['installDesktop1','installDesktop2'];
+    const icones = tipo === 'ios' ? ['share','plus','check'] : ['menu','plus'];
+    const desenhos = {share:'<path d="M12 15V3m-4 4 4-4 4 4M8 10H5v11h14V10h-3"/>',plus:'<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 7v10M7 12h10"/>',check:'<path d="m5 12 4 4L19 6"/>',menu:'<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>'};
+    const corpo = document.getElementById('install-steps');
+    corpo.replaceChildren();
+    passos.forEach((chave,i) => {
+      const linha = document.createElement('div'); linha.className = 'install-step';
+      const icone = document.createElement('span'); icone.className = 'install-step-icon';
+      icone.innerHTML = `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${desenhos[icones[i]]}</svg>`;
+      const texto = document.createElement('span'); texto.dataset.i18n = chave; texto.textContent = t(chave);
+      linha.append(icone,texto); corpo.append(linha);
+    });
+    if (!dialogInstalar.open) dialogInstalar.showModal();
+  }
   async function acionarInstalacaoApp() {
     setMenu3DotsAberto(false);
     setMenu3DotsHomeAberto(false);
-
+    if (isAppStandalone() || instalacaoConfirmada || instalacaoEmCurso) return;
     if (deferredInstallPrompt) {
-      deferredInstallPrompt.prompt();
-      const { outcome } = await deferredInstallPrompt.userChoice;
-      if (outcome === 'accepted') {
-        deferredInstallPrompt = null;
-        sincronizarBotoesInstalar();
-      }
+      const prompt = deferredInstallPrompt;
+      deferredInstallPrompt = null;
+      instalacaoEmCurso = true;
+      try {
+        await prompt.prompt();
+        const { outcome } = await prompt.userChoice;
+        if (outcome === 'accepted') instalacaoConfirmada = true;
+      } catch { mostrarInstrucoesInstalacao(); }
+      finally { instalacaoEmCurso = false; sincronizarBotoesInstalar(); }
       return;
     }
-
-    if (isIOSDevice()) {
-      alert('Para instalar no iPhone/iPad:\n\n1. Toque no botão Compartilhar do Safari.\n2. Toque em "Adicionar à Tela de Início".');
-    } else if (isAndroidDevice()) {
-      alert('Para instalar no Android:\n\n1. Toque nos 3 pontinhos (⋮) no canto superior direito do navegador.\n2. Toque em "Instalar aplicativo" ou "Adicionar à tela inicial".');
-    } else {
-      alert('Para instalar, use a opção "Instalar aplicativo" ou "Adicionar à tela inicial" no menu do navegador.');
-    }
+    mostrarInstrucoesInstalacao();
   }
-
+  ['install-close','install-ok'].forEach(id => document.getElementById(id)?.addEventListener('click', () => dialogInstalar.close()));
+  dialogInstalar.addEventListener('click', e => { if (e.target === dialogInstalar) { const r = dialogInstalar.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dialogInstalar.close(); } });
   sincronizarBotoesInstalar();
-  document.getElementById('btn-instalar-app')?.addEventListener('click', acionarInstalacaoApp);
-  document.getElementById('btn-instalar-app-home')?.addEventListener('click', acionarInstalacaoApp);
-  document.getElementById('btn-instalar-app-gate')?.addEventListener('click', acionarInstalacaoApp);
+  ['btn-instalar-app','btn-instalar-app-home','btn-instalar-app-gate'].forEach(id => document.getElementById(id)?.addEventListener('click', acionarInstalacaoApp));
   document.getElementById('btn-fechar-escolher-grupo')?.addEventListener('click', fecharModalEscolherGrupoGasto);
 
   document.getElementById('modal-escolher-grupo-gasto')?.addEventListener('click', (e) => {
@@ -5206,17 +5448,19 @@ function initMinhaConta() {
     catch(e) { contaEl('conta-status').textContent = traduzirErroAuth(e); }
   };
   const senhaForm = contaEl('conta-senha-form');
-  const fecharSenha = () => { if(contaOcupada) return; senhaForm.reset(); contaEl('modal-conta-senha').classList.add('hidden'); };
+  for (const id of ['conta-senha-nova','conta-senha-repetir']) contaEl(id).addEventListener('input', atualizarRequisitosConta);
+  const fecharSenha = () => { if(contaOcupada) return; senhaForm.reset(); atualizarRequisitosConta(); contaEl('modal-conta-senha').classList.add('hidden'); };
   contaEl('conta-senha-abrir').onclick = () => {
     if(contaOcupada) return;
     if(!currentUser?.providerData.some(p=>p.providerId==='password')) { contaEl('conta-status').textContent=t('accountGooglePassword'); return; }
-    senhaForm.reset(); contaEl('conta-senha-status').textContent=''; contaEl('modal-conta-senha').classList.remove('hidden');
+    senhaForm.reset(); atualizarRequisitosConta(); contaEl('conta-senha-status').textContent=''; contaEl('modal-conta-senha').classList.remove('hidden');
   };
   for(const id of ['conta-senha-fechar','conta-senha-cancelar']) contaEl(id).onclick=fecharSenha;
   contaEl('modal-conta-senha').onclick=e=>{if(e.target===contaEl('modal-conta-senha')) fecharSenha();};
   senhaForm.onsubmit=async e=>{
     e.preventDefault(); if(contaOcupada || !currentUser) return;
     const user=currentUser, nova=contaEl('conta-senha-nova').value, status=contaEl('conta-senha-status');
+    if(!senhaNovaValida(nova)){status.textContent=t('passwordPolicyError');return;}
     if(nova!==contaEl('conta-senha-repetir').value){status.textContent=t('accountMismatch');return;}
     contaOcupada=true; contaEl('conta-senha-salvar').disabled=true;
     try { await reauthenticateWithCredential(user,EmailAuthProvider.credential(user.email,contaEl('conta-senha-atual').value)); await updatePassword(user,nova); contaOcupada=false; fecharSenha(); contaEl('conta-status').textContent=t('accountPasswordSaved'); }
